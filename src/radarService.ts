@@ -118,7 +118,8 @@ export class RadarService {
         notFound.push(name)
       }
 
-      const history = this.getTechnologyHistory({ name })
+      const historyName = found ? found.name : name
+      const history = this.getTechnologyHistory({ name: historyName })
       if (history) histories.push(history)
     }
 
