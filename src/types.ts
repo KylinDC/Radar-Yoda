@@ -1,4 +1,4 @@
-export type Ring = 'adopt' | 'trial' | 'assess' | 'hold'
+export type Ring = 'adopt' | 'trial' | 'assess' | 'hold' | 'caution'
 
 export type Quadrant =
   | 'techniques'
