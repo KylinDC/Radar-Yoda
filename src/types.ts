@@ -18,6 +18,28 @@ export interface RadarEntry {
   year: number
 }
 
+export type AuditItemStatus = 'healthy' | 'monitor' | 'migrate' | 'unknown'
+
+export interface AuditItem {
+  name: string
+  ring: Ring | 'unknown'
+  quadrant?: Quadrant
+  status: AuditItemStatus
+  alternatives?: RadarEntry[]
+}
+
+export interface AuditResult {
+  summary: {
+    total: number
+    healthy: number
+    monitor: number
+    migrate: number
+    unknown: number
+  }
+  items: AuditItem[]
+  notFound: string[]
+}
+
 export interface RadarIndex {
   fuseIndex: import('fuse.js').default<RadarEntry>
   historyMap: Map<string, RadarEntry[]>

@@ -7,6 +7,7 @@ import {
   createFindAlternativesTool,
   createListByRingAndQuadrantTool,
   createCompareTechnologiesTool,
+  createAuditTechStackTool,
 } from './tools.js'
 
 async function main() {
@@ -22,6 +23,7 @@ async function main() {
       findAlternatives: createFindAlternativesTool(service),
       listByRingAndQuadrant: createListByRingAndQuadrantTool(service),
       compareTechnologies: createCompareTechnologiesTool(service),
+      auditTechStack: createAuditTechStackTool(service),
     },
   })
 

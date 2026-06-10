@@ -1,4 +1,4 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant } from './types.js'
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult } from './types.js'
 
 type SearchInput = { query: string; quadrant?: Quadrant; ring?: Ring }
 type SearchResult = { results: RadarEntry[]; found: boolean }
@@ -91,6 +91,64 @@ export class RadarService {
       .sort((a, b) => a.name.localeCompare(b.name))
 
     return { input: inputEntry, warning, alternatives }
+  }
+
+  auditTechStack(input: { technologies: string[] }): AuditResult {
+    const items: AuditItem[] = []
+    const notFound: string[] = []
+
+    for (const tech of input.technologies) {
+      // Look up current status (Vol.34) first, fall back to last known entry
+      let entry: RadarEntry | undefined
+      for (const list of this.index.ringQuadrantMap.values()) {
+        entry = list.find((e) => e.name.toLowerCase() === tech.toLowerCase())
+        if (entry) break
+      }
+      if (!entry) {
+        const history = this.index.historyMap.get(tech.toLowerCase())
+        if (history && history.length > 0) {
+          entry = history[history.length - 1]
+        }
+      }
+
+      if (!entry) {
+        notFound.push(tech)
+        items.push({ name: tech, ring: 'unknown', status: 'unknown' })
+        continue
+      }
+
+      const statusMap: Record<Ring, AuditItem['status']> = {
+        adopt: 'healthy',
+        trial: 'healthy',
+        assess: 'monitor',
+        hold: 'migrate',
+        caution: 'migrate',
+      }
+
+      const item: AuditItem = {
+        name: entry.name,
+        ring: entry.ring,
+        quadrant: entry.quadrant,
+        status: statusMap[entry.ring],
+      }
+
+      if (item.status === 'migrate') {
+        const altResult = this.findAlternatives({ name: entry.name })
+        if (altResult) item.alternatives = altResult.alternatives
+      }
+
+      items.push(item)
+    }
+
+    const summary = {
+      total: items.length,
+      healthy: items.filter((i) => i.status === 'healthy').length,
+      monitor: items.filter((i) => i.status === 'monitor').length,
+      migrate: items.filter((i) => i.status === 'migrate').length,
+      unknown: items.filter((i) => i.status === 'unknown').length,
+    }
+
+    return { summary, items, notFound }
   }
 
   compareTechnologies(input: { names: string[] }): {

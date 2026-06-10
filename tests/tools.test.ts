@@ -7,6 +7,7 @@ import {
   createFindAlternativesTool,
   createListByRingAndQuadrantTool,
   createCompareTechnologiesTool,
+  createAuditTechStackTool,
 } from '../src/tools.js'
 
 describe('MCP Tools Integration', () => {
@@ -79,6 +80,40 @@ describe('MCP Tools Integration', () => {
       const tool = createListByRingAndQuadrantTool(service)
       const result = await tool.execute({ context: { ring: 'assess', quadrant: 'tools' } })
       expect(Array.isArray(result)).toBe(true)
+    })
+  })
+
+  describe('auditTechStack tool', () => {
+    it('happy path — audits a mixed list and returns summary + items', async () => {
+      const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+      const tool = createAuditTechStackTool(service)
+      const result = await tool.execute({
+        context: { technologies: [adoptTech.name, 'xyzzy123notreal'] },
+      }) as { summary: { total: number; healthy: number; unknown: number }; items: { status: string }[]; notFound: string[] }
+      expect(result.summary.total).toBe(2)
+      expect(result.summary.healthy).toBe(1)
+      expect(result.summary.unknown).toBe(1)
+      expect(result.notFound).toContain('xyzzy123notreal')
+    })
+
+    it('migrate path — hold/caution tech gets alternatives in result', async () => {
+      const cautionTechs = service.listByRingAndQuadrant({ ring: 'caution' })
+      if (cautionTechs.length === 0) return
+      const tool = createAuditTechStackTool(service)
+      const result = await tool.execute({
+        context: { technologies: [cautionTechs[0].name] },
+      }) as { items: { status: string; alternatives?: unknown[] }[] }
+      expect(result.items[0].status).toBe('migrate')
+      expect(result.items[0].alternatives?.length).toBeGreaterThan(0)
+    })
+
+    it('empty path — returns empty items for empty list', async () => {
+      const tool = createAuditTechStackTool(service)
+      const result = await tool.execute({ context: { technologies: [] } }) as {
+        summary: { total: number }; items: unknown[]
+      }
+      expect(result.items).toHaveLength(0)
+      expect(result.summary.total).toBe(0)
     })
   })
 

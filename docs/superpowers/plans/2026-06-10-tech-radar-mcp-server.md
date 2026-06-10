@@ -1216,6 +1216,341 @@ EOF
 
 ---
 
+## Task 10: Audit Tech Stack Tool
+
+**Goal:** Add a sixth MCP tool — `auditTechStack` — that accepts a list of technology names and returns a structured health report: each technology's current ring status, a categorisation (`healthy` / `monitor` / `migrate` / `unknown`), recommended alternatives for Hold/Caution technologies, and an aggregate summary.
+
+**Files:**
+- Modify: `src/types.ts` — add `AuditItemStatus`, `AuditItem`, `AuditResult`
+- Modify: `src/radarService.ts` — add `auditTechStack()` method
+- Modify: `src/tools.ts` — add `createAuditTechStackTool()`
+- Modify: `src/index.ts` — register `auditTechStack` tool
+- Modify: `tests/radarService.test.ts` — add service-level tests
+- Modify: `tests/tools.test.ts` — add tool-level integration tests
+
+---
+
+- [x] **Step 1: Add types to `src/types.ts`**
+
+Append after the `RadarEntry` interface and before `RadarIndex`:
+
+```typescript
+export type AuditItemStatus = 'healthy' | 'monitor' | 'migrate' | 'unknown'
+
+export interface AuditItem {
+  name: string
+  ring: Ring | 'unknown'
+  quadrant?: Quadrant
+  status: AuditItemStatus
+  alternatives?: RadarEntry[]
+}
+
+export interface AuditResult {
+  summary: {
+    total: number
+    healthy: number
+    monitor: number
+    migrate: number
+    unknown: number
+  }
+  items: AuditItem[]
+  notFound: string[]
+}
+```
+
+---
+
+- [x] **Step 2: Add failing tests for `RadarService.auditTechStack` to `tests/radarService.test.ts`**
+
+Append before the `RadarService.compareTechnologies` describe block:
+
+```typescript
+describe('RadarService.auditTechStack', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns healthy status for adopt technologies', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const result = service.auditTechStack({ technologies: [adoptTech.name] })
+    const item = result.items.find((i) => i.name === adoptTech.name)
+    expect(item?.status).toBe('healthy')
+    expect(item?.ring).toBe('adopt')
+  })
+
+  it('returns healthy status for trial technologies', () => {
+    const trialTechs = service.listByRingAndQuadrant({ ring: 'trial' })
+    if (trialTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [trialTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('healthy')
+    expect(item.ring).toBe('trial')
+  })
+
+  it('returns monitor status for assess technologies', () => {
+    const assessTechs = service.listByRingAndQuadrant({ ring: 'assess' })
+    if (assessTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [assessTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('monitor')
+  })
+
+  it('returns migrate status for hold/caution technologies and includes alternatives', () => {
+    const cautionTechs = service.listByRingAndQuadrant({ ring: 'caution' })
+    if (cautionTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [cautionTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('migrate')
+    expect(item.alternatives).toBeDefined()
+    expect(item.alternatives!.length).toBeGreaterThan(0)
+    item.alternatives!.forEach((a) => expect(['adopt', 'trial']).toContain(a.ring))
+  })
+
+  it('marks unknown technology as unknown status and adds to notFound', () => {
+    const result = service.auditTechStack({ technologies: ['xyzzy123notreal'] })
+    expect(result.notFound).toContain('xyzzy123notreal')
+    const item = result.items.find((i) => i.name === 'xyzzy123notreal')
+    expect(item?.status).toBe('unknown')
+    expect(item?.ring).toBe('unknown')
+  })
+
+  it('summary counts add up to total', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const result = service.auditTechStack({
+      technologies: [adoptTech.name, 'xyzzy123notreal'],
+    })
+    expect(result.summary.total).toBe(2)
+    const { healthy, monitor, migrate, unknown } = result.summary
+    expect(healthy + monitor + migrate + unknown).toBe(result.summary.total)
+  })
+
+  it('summary healthy count equals adopt + trial items', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const trialTechs = service.listByRingAndQuadrant({ ring: 'trial' })
+    const technologies = trialTechs.length > 0
+      ? [adoptTech.name, trialTechs[0].name]
+      : [adoptTech.name]
+    const result = service.auditTechStack({ technologies })
+    expect(result.summary.healthy).toBe(technologies.length)
+  })
+
+  it('is case-insensitive', () => {
+    const result = service.auditTechStack({ technologies: ['react js'] })
+    expect(result.notFound).not.toContain('react js')
+    expect(result.items[0].status).not.toBe('unknown')
+  })
+
+  it('returns empty results for empty input', () => {
+    const result = service.auditTechStack({ technologies: [] })
+    expect(result.items).toHaveLength(0)
+    expect(result.summary.total).toBe(0)
+  })
+})
+```
+
+- [x] **Step 3: Run tests to verify they fail**
+
+Run: `npx vitest run tests/radarService.test.ts`
+Expected: FAIL — `service.auditTechStack is not a function`.
+
+---
+
+- [x] **Step 4: Add `auditTechStack` method to `src/radarService.ts`**
+
+Update the import to include the new types:
+
+```typescript
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult } from './types.js'
+```
+
+Add the method inside `RadarService` before `compareTechnologies`:
+
+```typescript
+auditTechStack(input: { technologies: string[] }): AuditResult {
+  const items: AuditItem[] = []
+  const notFound: string[] = []
+
+  for (const tech of input.technologies) {
+    // Look up current status (Vol.34) first, fall back to last known entry
+    let entry: RadarEntry | undefined
+    for (const list of this.index.ringQuadrantMap.values()) {
+      entry = list.find((e) => e.name.toLowerCase() === tech.toLowerCase())
+      if (entry) break
+    }
+    if (!entry) {
+      const history = this.index.historyMap.get(tech.toLowerCase())
+      if (history && history.length > 0) {
+        entry = history[history.length - 1]
+      }
+    }
+
+    if (!entry) {
+      notFound.push(tech)
+      items.push({ name: tech, ring: 'unknown', status: 'unknown' })
+      continue
+    }
+
+    const statusMap: Record<Ring, AuditItem['status']> = {
+      adopt: 'healthy',
+      trial: 'healthy',
+      assess: 'monitor',
+      hold: 'migrate',
+      caution: 'migrate',
+    }
+
+    const item: AuditItem = {
+      name: entry.name,
+      ring: entry.ring,
+      quadrant: entry.quadrant,
+      status: statusMap[entry.ring],
+    }
+
+    if (item.status === 'migrate') {
+      const altResult = this.findAlternatives({ name: entry.name })
+      if (altResult) item.alternatives = altResult.alternatives
+    }
+
+    items.push(item)
+  }
+
+  const summary = {
+    total: items.length,
+    healthy: items.filter((i) => i.status === 'healthy').length,
+    monitor: items.filter((i) => i.status === 'monitor').length,
+    migrate: items.filter((i) => i.status === 'migrate').length,
+    unknown: items.filter((i) => i.status === 'unknown').length,
+  }
+
+  return { summary, items, notFound }
+}
+```
+
+- [x] **Step 5: Run tests to verify they pass**
+
+Run: `npx vitest run tests/radarService.test.ts`
+Expected: PASS (all 39 tests).
+
+---
+
+- [x] **Step 6: Add failing tool-layer tests to `tests/tools.test.ts`**
+
+Update the import:
+
+```typescript
+import {
+  createSearchTechnologyTool,
+  createGetTechnologyHistoryTool,
+  createFindAlternativesTool,
+  createListByRingAndQuadrantTool,
+  createCompareTechnologiesTool,
+  createAuditTechStackTool,
+} from '../src/tools.js'
+```
+
+Add a new describe block inside `MCP Tools Integration`:
+
+```typescript
+describe('auditTechStack tool', () => {
+  it('happy path — audits a mixed list and returns summary + items', async () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const tool = createAuditTechStackTool(service)
+    const result = await tool.execute({
+      context: { technologies: [adoptTech.name, 'xyzzy123notreal'] },
+    }) as { summary: { total: number; healthy: number; unknown: number }; items: { status: string }[]; notFound: string[] }
+    expect(result.summary.total).toBe(2)
+    expect(result.summary.healthy).toBe(1)
+    expect(result.summary.unknown).toBe(1)
+    expect(result.notFound).toContain('xyzzy123notreal')
+  })
+
+  it('migrate path — hold/caution tech gets alternatives in result', async () => {
+    const cautionTechs = service.listByRingAndQuadrant({ ring: 'caution' })
+    if (cautionTechs.length === 0) return
+    const tool = createAuditTechStackTool(service)
+    const result = await tool.execute({
+      context: { technologies: [cautionTechs[0].name] },
+    }) as { items: { status: string; alternatives?: unknown[] }[] }
+    expect(result.items[0].status).toBe('migrate')
+    expect(result.items[0].alternatives?.length).toBeGreaterThan(0)
+  })
+
+  it('empty path — returns empty items for empty list', async () => {
+    const tool = createAuditTechStackTool(service)
+    const result = await tool.execute({ context: { technologies: [] } }) as {
+      summary: { total: number }; items: unknown[]
+    }
+    expect(result.items).toHaveLength(0)
+    expect(result.summary.total).toBe(0)
+  })
+})
+```
+
+- [x] **Step 7: Run tests to verify they fail**
+
+Run: `npx vitest run tests/tools.test.ts`
+Expected: FAIL — `createAuditTechStackTool is not exported`.
+
+---
+
+- [x] **Step 8: Add `createAuditTechStackTool` to `src/tools.ts`**
+
+Add before `createCompareTechnologiesTool`:
+
+```typescript
+export function createAuditTechStackTool(service: RadarService) {
+  const tool = createTool({
+    id: 'audit_tech_stack',
+    description:
+      'Call this when the user wants to review, assess, or get a health check of their current tech stack. ' +
+      'Given a list of technology names, returns a health report: which are Adopt/Trial (healthy), ' +
+      'which need monitoring (Assess), which should be replaced (Hold/Caution) with recommended alternatives, ' +
+      'and which are unknown. Use this for architecture reviews or migration planning.',
+    inputSchema: z.object({
+      context: z.object({
+        technologies: z
+          .array(z.string())
+          .describe('List of technology names to audit'),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.auditTechStack(context)
+    },
+  })
+  return tool
+}
+```
+
+- [x] **Step 9: Register tool in `src/index.ts`**
+
+Update the import:
+
+```typescript
+import {
+  createSearchTechnologyTool,
+  createGetTechnologyHistoryTool,
+  createFindAlternativesTool,
+  createListByRingAndQuadrantTool,
+  createCompareTechnologiesTool,
+  createAuditTechStackTool,
+} from './tools.js'
+```
+
+Add to the `tools` object:
+
+```typescript
+auditTechStack: createAuditTechStackTool(service),
+```
+
+- [x] **Step 10: Run all tests to verify zero regressions**
+
+Run: `npx vitest run`
+Expected: PASS (53 tests across both test files, zero failures).
+
+---
+
 ## Self-Review Checklist
 
 ### Spec Coverage
@@ -1227,6 +1562,7 @@ EOF
 | T3 `find_alternatives` | Task 5 + 6 |
 | T4 `list_by_ring_and_quadrant` | Task 4 + 6 |
 | T5 `compare_technologies` | Task 5 + 6 |
+| T6 `audit_tech_stack` — health report for a tech stack list | Task 10 |
 | DataLoader — 34 volumes, volume+year from filename | Task 3 |
 | DataLoader — Fuse.js index for Vol.34 | Task 3 |
 | DataLoader — historyMap all volumes, sorted asc | Task 3 |
@@ -1235,9 +1571,13 @@ EOF
 | No-results: `{ found: false, suggestions: [] }` | Task 4 |
 | T3 warning when not Hold | Task 5 |
 | T5 `notFound` field | Task 5 |
-| Tools never throw | Task 6 (execute always returns) |
-| Unit tests with real JSON | Task 3–5 |
-| Integration tests via tool execute | Task 6 |
+| T6 `summary` counts (healthy/monitor/migrate/unknown) | Task 10 |
+| T6 `alternatives` auto-populated for Hold/Caution | Task 10 |
+| T6 `notFound` for unrecognised technologies | Task 10 |
+| T6 historyMap fallback for technologies dropped from Vol.34 | Task 10 |
+| Tools never throw | Task 6 + 10 (execute always returns) |
+| Unit tests with real JSON | Task 3–5 + 10 |
+| Integration tests via tool execute | Task 6 + 10 |
 | Demo script Jenkins scenario | Task 8 |
 | MCPServer stdio startup | Task 7 |
 

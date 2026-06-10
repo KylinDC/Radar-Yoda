@@ -81,6 +81,28 @@ export function createListByRingAndQuadrantTool(service: RadarService) {
   return tool
 }
 
+export function createAuditTechStackTool(service: RadarService) {
+  const tool = createTool({
+    id: 'audit_tech_stack',
+    description:
+      'Call this when the user wants to review, assess, or get a health check of their current tech stack. ' +
+      'Given a list of technology names, returns a health report: which are Adopt/Trial (healthy), ' +
+      'which need monitoring (Assess), which should be replaced (Hold/Caution) with recommended alternatives, ' +
+      'and which are unknown. Use this for architecture reviews or migration planning.',
+    inputSchema: z.object({
+      context: z.object({
+        technologies: z
+          .array(z.string())
+          .describe('List of technology names to audit'),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.auditTechStack(context)
+    },
+  })
+  return tool
+}
+
 export function createCompareTechnologiesTool(service: RadarService) {
   const tool = createTool({
     id: 'compare_technologies',

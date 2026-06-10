@@ -249,6 +249,91 @@ describe('RadarService.findAlternatives', () => {
   })
 })
 
+describe('RadarService.auditTechStack', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns healthy status for adopt technologies', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const result = service.auditTechStack({ technologies: [adoptTech.name] })
+    const item = result.items.find((i) => i.name === adoptTech.name)
+    expect(item?.status).toBe('healthy')
+    expect(item?.ring).toBe('adopt')
+  })
+
+  it('returns healthy status for trial technologies', () => {
+    const trialTechs = service.listByRingAndQuadrant({ ring: 'trial' })
+    if (trialTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [trialTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('healthy')
+    expect(item.ring).toBe('trial')
+  })
+
+  it('returns monitor status for assess technologies', () => {
+    const assessTechs = service.listByRingAndQuadrant({ ring: 'assess' })
+    if (assessTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [assessTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('monitor')
+  })
+
+  it('returns migrate status for hold/caution technologies and includes alternatives', () => {
+    const cautionTechs = service.listByRingAndQuadrant({ ring: 'caution' })
+    if (cautionTechs.length === 0) return
+    const result = service.auditTechStack({ technologies: [cautionTechs[0].name] })
+    const item = result.items[0]
+    expect(item.status).toBe('migrate')
+    expect(item.alternatives).toBeDefined()
+    expect(item.alternatives!.length).toBeGreaterThan(0)
+    item.alternatives!.forEach((a) => expect(['adopt', 'trial']).toContain(a.ring))
+  })
+
+  it('marks unknown technology as unknown status and adds to notFound', () => {
+    const result = service.auditTechStack({ technologies: ['xyzzy123notreal'] })
+    expect(result.notFound).toContain('xyzzy123notreal')
+    const item = result.items.find((i) => i.name === 'xyzzy123notreal')
+    expect(item?.status).toBe('unknown')
+    expect(item?.ring).toBe('unknown')
+  })
+
+  it('summary counts add up to total', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const result = service.auditTechStack({
+      technologies: [adoptTech.name, 'xyzzy123notreal'],
+    })
+    expect(result.summary.total).toBe(2)
+    const { healthy, monitor, migrate, unknown } = result.summary
+    expect(healthy + monitor + migrate + unknown).toBe(result.summary.total)
+  })
+
+  it('summary healthy count equals adopt + trial items', () => {
+    const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
+    const trialTechs = service.listByRingAndQuadrant({ ring: 'trial' })
+    const technologies = trialTechs.length > 0
+      ? [adoptTech.name, trialTechs[0].name]
+      : [adoptTech.name]
+    const result = service.auditTechStack({ technologies })
+    expect(result.summary.healthy).toBe(technologies.length)
+  })
+
+  it('is case-insensitive', () => {
+    const result = service.auditTechStack({ technologies: ['react js'] })
+    expect(result.notFound).not.toContain('react js')
+    expect(result.items[0].status).not.toBe('unknown')
+  })
+
+  it('returns empty results for empty input', () => {
+    const result = service.auditTechStack({ technologies: [] })
+    expect(result.items).toHaveLength(0)
+    expect(result.summary.total).toBe(0)
+  })
+})
+
 describe('RadarService.compareTechnologies', () => {
   let service: RadarService
 
