@@ -25,7 +25,11 @@ export class RadarService {
       entries = entries.filter((e) => e.ring === input.ring)
     }
 
-    return entries.slice(0, 5)
+    const top = entries.slice(0, 5)
+    if (top.length === 0) {
+      return { found: false, suggestions: [] }
+    }
+    return top
   }
 
   listByRingAndQuadrant(input: ListInput): RadarEntry[] {
@@ -45,7 +49,12 @@ export class RadarService {
     name: string
     history: { volume: number; year: number; ring: Ring; status: string }[]
   } | null {
-    const entries = this.index.historyMap.get(input.name)
+    // Try exact match first, then case-insensitive fallback
+    const entries =
+      this.index.historyMap.get(input.name) ??
+      [...this.index.historyMap.entries()].find(
+        ([k]) => k.toLowerCase() === input.name.toLowerCase()
+      )?.[1]
     if (!entries || entries.length === 0) return null
 
     return {

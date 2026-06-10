@@ -21,8 +21,9 @@ function stripHtml(html: string): string {
 function parseVolumeAndYear(filename: string): { volume: number; year: number } {
   const volMatch = filename.match(/Volume\s+(\d+)/i)
   const yearMatch = filename.match(/\(.*?(\d{4})\)/)
+  if (!volMatch) throw new Error(`Cannot parse volume from filename: ${filename}`)
   return {
-    volume: volMatch ? parseInt(volMatch[1], 10) : 0,
+    volume: parseInt(volMatch[1], 10),
     year: yearMatch ? parseInt(yearMatch[1], 10) : 0,
   }
 }
@@ -43,7 +44,6 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
     .sort()
 
   const allEntries: RadarEntry[] = []
-  let vol34Entries: RadarEntry[] = []
 
   for (const filename of files) {
     const { volume, year } = parseVolumeAndYear(filename)
@@ -64,7 +64,14 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
     }))
 
     allEntries.push(...entries)
-    if (volume === 34) vol34Entries = entries
+  }
+
+  // Dynamically detect the latest volume
+  const maxVolume = allEntries.reduce((max, e) => Math.max(max, e.volume), 0)
+  const latestVolumeEntries = allEntries.filter((e) => e.volume === maxVolume)
+
+  if (latestVolumeEntries.length === 0) {
+    throw new Error('Failed to find latest radar volume data. Check tech-radar-json-data/ directory.')
   }
 
   // historyMap — all volumes, sorted by volume ascending
@@ -89,7 +96,7 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
 
   // ringQuadrantMap — latest volume only, key = "ring:quadrant"
   const ringQuadrantMap = new Map<string, RadarEntry[]>()
-  for (const entry of vol34Entries) {
+  for (const entry of latestVolumeEntries) {
     const key = `${entry.ring}:${entry.quadrant}`
     const existing = ringQuadrantMap.get(key) ?? []
     existing.push(entry)
