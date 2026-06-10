@@ -77,7 +77,7 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
   // historyMap — all volumes, sorted by volume ascending
   const historyMap = new Map<string, RadarEntry[]>()
   for (const entry of allEntries) {
-    const key = entry.name
+    const key = entry.name.toLowerCase()
     const existing = historyMap.get(key) ?? []
     existing.push(entry)
     historyMap.set(key, existing)

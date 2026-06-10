@@ -62,7 +62,7 @@ describe('DataLoader', () => {
 
   it('historyMap entries for a technology are sorted by volume ascending', async () => {
     const index = await buildRadarIndex()
-    const history = index.historyMap.get('Docker')
+    const history = index.historyMap.get('docker')
     if (history && history.length > 1) {
       for (let i = 1; i < history.length; i++) {
         expect(history[i].volume).toBeGreaterThan(history[i - 1].volume)
@@ -80,37 +80,39 @@ describe('RadarService.searchTechnology', () => {
   })
 
   it('finds Docker by exact name', () => {
-    const results = service.searchTechnology({ query: 'Docker' })
-    expect(results.length).toBeGreaterThan(0)
-    expect(results[0].name.toLowerCase()).toContain('docker')
+    const result = service.searchTechnology({ query: 'Docker' })
+    expect(result.found).toBe(true)
+    expect(result.results.length).toBeGreaterThan(0)
+    expect(result.results[0].name.toLowerCase()).toContain('docker')
   })
 
   it('finds results with fuzzy match', () => {
-    const results = service.searchTechnology({ query: 'Kubernete' }) // typo
-    expect(results.length).toBeGreaterThan(0)
+    const result = service.searchTechnology({ query: 'Kubernete' }) // typo
+    expect(result.found).toBe(true)
+    expect(result.results.length).toBeGreaterThan(0)
   })
 
   it('filters by quadrant', () => {
-    const results = service.searchTechnology({
+    const result = service.searchTechnology({
       query: 'Docker',
       quadrant: 'platforms',
     })
-    results.forEach((r) => expect(r.quadrant).toBe('platforms'))
+    result.results.forEach((r) => expect(r.quadrant).toBe('platforms'))
   })
 
   it('filters by ring', () => {
-    const results = service.searchTechnology({ query: 'Docker', ring: 'adopt' })
-    results.forEach((r) => expect(r.ring).toBe('adopt'))
+    const result = service.searchTechnology({ query: 'Docker', ring: 'adopt' })
+    result.results.forEach((r) => expect(r.ring).toBe('adopt'))
   })
 
   it('returns at most 5 results', () => {
-    const results = service.searchTechnology({ query: 'test' })
-    expect(results.length).toBeLessThanOrEqual(5)
+    const result = service.searchTechnology({ query: 'test' })
+    expect(result.results.length).toBeLessThanOrEqual(5)
   })
 
   it('returns found:false when nothing matches', () => {
     const result = service.searchTechnology({ query: 'xyzzy123notreal' })
-    expect(result).toEqual({ found: false, suggestions: [] })
+    expect(result).toMatchObject({ found: false, results: [] })
   })
 })
 

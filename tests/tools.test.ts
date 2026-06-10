@@ -21,8 +21,8 @@ describe('MCP Tools Integration', () => {
     it('happy path — finds Context engineering (in Vol.34)', async () => {
       const tool = createSearchTechnologyTool(service)
       const result = await tool.execute({ context: { query: 'Context engineering' } })
-      expect(Array.isArray(result)).toBe(true)
-      expect((result as { name: string }[]).length).toBeGreaterThan(0)
+      expect((result as { found: boolean }).found).toBe(true)
+      expect((result as { results: unknown[] }).results.length).toBeGreaterThan(0)
     })
 
     it('no-result path — returns found:false', async () => {

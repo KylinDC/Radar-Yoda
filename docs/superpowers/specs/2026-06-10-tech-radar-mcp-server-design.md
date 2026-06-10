@@ -60,6 +60,10 @@ DataLoader ──▶ RadarIndex ◀── RadarService ◀── MCP Tools
 ```typescript
 type Ring = 'adopt' | 'trial' | 'assess' | 'hold'
 type Quadrant = 'techniques' | 'tools' | 'platforms' | 'languages-and-frameworks'
+```
+
+
+```typescript
 
 interface RadarEntry {
   name: string
@@ -91,6 +95,7 @@ interface RadarIndex {
 3. All volumes → aggregate entries by technology name into `historyMap`.
 4. Vol.34 entries → group by `ring:quadrant` into `ringQuadrantMap`.
 
+
 ---
 
 ## 5. MCP Tools Interface
@@ -102,6 +107,7 @@ Fuzzy-search for a technology, with optional ring/quadrant filters.
 input:  { query: string, quadrant?: Quadrant, ring?: Ring }
 output: RadarEntry[]  // up to 5 results
 ```
+
 
 ### T2 `get_technology_history`
 Return the ring change history of a technology across all volumes.
@@ -121,10 +127,11 @@ Find Adopt/Trial replacements in the same quadrant as the given technology.
 input:  { name: string }
 output: {
   input: RadarEntry,
-  warning?: string,        // present if input technology is not on Hold
+  warning?: string,        // present if input technology is not on Hold or Caution
   alternatives: RadarEntry[]
 }
 ```
+
 
 ### T4 `list_by_ring_and_quadrant`
 List all technologies matching a given ring and/or quadrant.
@@ -145,6 +152,7 @@ output: {
   notFound?: string[]
 }
 ```
+
 
 ---
 
@@ -183,7 +191,8 @@ Tools never throw exceptions. They always return structured results, letting the
 | Scenario | Handling |
 |---|---|
 | No search results | Return `{ found: false, suggestions: [...] }` with up to 3 closest matches |
-| T3 input is not on Hold | Return normally with a `warning` field explaining the ring status |
+
+| T3 input is not on Hold or Caution | Return normally with a `warning` field explaining the ring status |
 | T5 one technology not found | Return found entries; list missing names in `notFound` field |
 
 ---

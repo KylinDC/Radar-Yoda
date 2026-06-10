@@ -1,7 +1,7 @@
 import type { RadarEntry, RadarIndex, Ring, Quadrant } from './types.js'
 
 type SearchInput = { query: string; quadrant?: Quadrant; ring?: Ring }
-type SearchResult = RadarEntry[] | { found: false; suggestions: RadarEntry[] }
+type SearchResult = { results: RadarEntry[]; found: boolean }
 
 type ListInput = { ring?: Ring; quadrant?: Quadrant }
 
@@ -10,12 +10,6 @@ export class RadarService {
 
   searchTechnology(input: SearchInput): SearchResult {
     const raw = this.index.fuseIndex.search(input.query)
-
-    // No match at all — return not-found sentinel
-    if (raw.length === 0) {
-      return { found: false, suggestions: [] }
-    }
-
     let entries = raw.map((r) => r.item)
 
     if (input.quadrant) {
@@ -25,11 +19,8 @@ export class RadarService {
       entries = entries.filter((e) => e.ring === input.ring)
     }
 
-    const top = entries.slice(0, 5)
-    if (top.length === 0) {
-      return { found: false, suggestions: [] }
-    }
-    return top
+    const results = entries.slice(0, 5)
+    return { results, found: results.length > 0 }
   }
 
   listByRingAndQuadrant(input: ListInput): RadarEntry[] {
@@ -49,16 +40,11 @@ export class RadarService {
     name: string
     history: { volume: number; year: number; ring: Ring; status: string }[]
   } | null {
-    // Try exact match first, then case-insensitive fallback
-    const entries =
-      this.index.historyMap.get(input.name) ??
-      [...this.index.historyMap.entries()].find(
-        ([k]) => k.toLowerCase() === input.name.toLowerCase()
-      )?.[1]
+    const entries = this.index.historyMap.get(input.name.toLowerCase())
     if (!entries || entries.length === 0) return null
 
     return {
-      name: input.name,
+      name: entries[entries.length - 1].name,
       history: entries.map((e) => ({
         volume: e.volume,
         year: e.year,
@@ -81,7 +67,12 @@ export class RadarService {
       )
       if (inputEntry) break
     }
-    if (!inputEntry) return null
+    if (!inputEntry) {
+      // Fall back to historyMap for technologies dropped from the latest volume
+      const history = this.index.historyMap.get(input.name.toLowerCase())
+      if (!history || history.length === 0) return null
+      inputEntry = history[history.length - 1]
+    }
 
     // Warn if technology is not in the "avoid" rings (hold or caution)
     const avoidRings: Ring[] = ['hold', 'caution']
@@ -101,7 +92,7 @@ export class RadarService {
     return { input: inputEntry, warning, alternatives }
   }
 
-  compareTechnologies(input: { names: [string, string] }): {
+  compareTechnologies(input: { names: string[] }): {
     entries: RadarEntry[]
     histories: {
       name: string

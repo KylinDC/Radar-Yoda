@@ -10,10 +10,10 @@ async function main() {
   // T1: search_technology("Jenkins")
   console.log('--- T1: search_technology("Jenkins") ---')
   const searchResult = service.searchTechnology({ query: 'Jenkins' })
-  if (!Array.isArray(searchResult)) {
+  if (!searchResult.found) {
     console.log('Jenkins not found in radar.')
   } else {
-    searchResult.forEach((e) =>
+    searchResult.results.forEach((e) =>
       console.log(`  ${e.name} | ring: ${e.ring} | quadrant: ${e.quadrant}`)
     )
   }

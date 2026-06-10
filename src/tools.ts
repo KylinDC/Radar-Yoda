@@ -89,8 +89,9 @@ export function createCompareTechnologiesTool(service: RadarService) {
     inputSchema: z.object({
       context: z.object({
         names: z
-          .tuple([z.string(), z.string()])
-          .describe('Exactly two technology names to compare'),
+          .array(z.string())
+          .min(2)
+          .describe('Two or more technology names to compare'),
       }),
     }),
     execute: async ({ context }) => {

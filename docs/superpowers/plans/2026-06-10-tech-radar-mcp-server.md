@@ -6,7 +6,7 @@
 
 **Architecture:** A `DataLoader` reads all 34 JSON files at startup and builds a `RadarIndex` (Fuse.js search index, history map, ring/quadrant map). A pure `RadarService` class encapsulates all query logic against the index. Five MCP tools implemented with `@mastra/mcp` delegate to `RadarService` and are served via stdio.
 
-**Tech Stack:** TypeScript, `@mastra/core` v1.41.0, `@mastra/mcp`, `fuse.js`, `zod`, `vitest`
+**Tech Stack:** TypeScript 6, `@mastra/core` v1.41.0, `@mastra/mcp`, `fuse.js`, `zod` v4, `vitest`, `biome` (formatter + linter)
 
 ---
 
@@ -22,6 +22,7 @@
 | `tests/radarService.test.ts` | Unit tests for `RadarService` (loads real JSON files) |
 | `tests/tools.test.ts` | Integration tests — calls `MCPServer.executeTool()` directly |
 | `demo.ts` | Standalone Jenkins migration demo script (T1 → T3 → T2 → T5) |
+| `biome.json` | Biome formatter + linter config (recommended rules, single-quote JS, type-aware lint) |
 
 ---
 
@@ -30,33 +31,39 @@
 **Files:**
 - Create: `package.json`
 - Create: `tsconfig.json`
+- Create: `biome.json`
 - Create: `vitest.config.ts`
 
 - [ ] **Step 1: Create `package.json`**
 
 ```json
 {
-  "name": "tech-radar-mcp-server",
-  "version": "1.0.0",
+  "name": "radar-yoda-server",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "demo": "npx tsx demo.ts"
+    "demo": "npx tsx demo.ts",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check ."
   },
   "dependencies": {
     "@mastra/core": "^1.41.0",
-    "@mastra/mcp": "^0.5.0",
-    "fuse.js": "^7.0.0",
-    "zod": "^3.23.0"
+    "@mastra/mcp": "^1.9.1",
+    "fuse.js": "^7.4.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "@biomejs/biome": "^2.4.16",
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   }
 }
 ```
@@ -80,7 +87,22 @@
 }
 ```
 
-- [ ] **Step 3: Create `vitest.config.ts`**
+- [ ] **Step 3: Create `biome.json`**
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
+  "linter": {
+    "enabled": true,
+    "rules": { "recommended": true }
+  },
+  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } }
+}
+```
+
+- [ ] **Step 4: Create `vitest.config.ts`**
 
 ```typescript
 import { defineConfig } from 'vitest/config'
@@ -92,16 +114,20 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Install dependencies**
+- [ ] **Step 5: Install dependencies**
 
 Run: `npm install`
 Expected: `node_modules/` created, no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add package.json tsconfig.json vitest.config.ts
-git commit -m "chore: project scaffold"
+git add package.json tsconfig.json biome.json vitest.config.ts
+git commit -m "$(cat <<'EOF'
+chore: project scaffold
+
+EOF
+)"
 ```
 
 ---
@@ -152,6 +178,10 @@ export type Quadrant =
   | 'tools'
   | 'platforms'
   | 'languages-and-frameworks'
+```
+
+
+```typescript
 
 export interface RadarEntry {
   name: string
@@ -181,7 +211,11 @@ Expected: PASS (2 tests)
 
 ```bash
 git add src/types.ts tests/radarService.test.ts
-git commit -m "feat: add core types"
+git commit -m "$(cat <<'EOF'
+feat: add core types
+
+EOF
+)"
 ```
 
 ---
@@ -348,6 +382,7 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
 }
 ```
 
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/radarService.test.ts`
@@ -357,7 +392,11 @@ Expected: PASS (7 tests including the 2 type tests from Task 2)
 
 ```bash
 git add src/dataLoader.ts tests/radarService.test.ts
-git commit -m "feat: add DataLoader with RadarIndex builder"
+git commit -m "$(cat <<'EOF'
+feat: add DataLoader with RadarIndex builder
+
+EOF
+)"
 ```
 
 ---
@@ -516,7 +555,11 @@ Expected: PASS (all tests up to this point)
 
 ```bash
 git add src/radarService.ts tests/radarService.test.ts
-git commit -m "feat: add RadarService search and list"
+git commit -m "$(cat <<'EOF'
+feat: add RadarService search and list
+
+EOF
+)"
 ```
 
 ---
@@ -675,7 +718,10 @@ Append to the `RadarService` class (inside the `}`):
 
     return { input: inputEntry, warning, alternatives }
   }
+```
 
+
+```typescript
   compareTechnologies(input: { names: [string, string] }): {
     entries: RadarEntry[]
     histories: {
@@ -723,7 +769,11 @@ Expected: PASS (all tests)
 
 ```bash
 git add src/radarService.ts tests/radarService.test.ts
-git commit -m "feat: add RadarService history, alternatives, compare"
+git commit -m "$(cat <<'EOF'
+feat: add RadarService history, alternatives, compare
+
+EOF
+)"
 ```
 
 ---
@@ -734,6 +784,8 @@ git commit -m "feat: add RadarService history, alternatives, compare"
 - Create: `src/tools.ts`
 
 > **Context on Mastra:** `createTool` from `@mastra/core` takes `{ id, description, inputSchema, execute }`. `inputSchema` is a Zod schema. `execute` receives `{ context }` where `context` is the validated input object. Tools must not throw — always return structured data.
+
+> **Zod v4 notes:** `import { z } from 'zod'` and all `.object`, `.string`, `.enum`, `.tuple`, `.optional` methods work identically to v3. One change: error handling uses `z.ZodError` (same as v3) but internal `issues` shape may differ — do not assert on error shape internals in tests. `z.infer<typeof schema>` still works for type extraction.
 
 - [ ] **Step 1: Add integration tests to `tests/tools.test.ts`**
 
@@ -948,7 +1000,11 @@ Expected: PASS (10 tests)
 
 ```bash
 git add src/tools.ts tests/tools.test.ts
-git commit -m "feat: add MCP tool definitions"
+git commit -m "$(cat <<'EOF'
+feat: add MCP tool definitions
+
+EOF
+)"
 ```
 
 ---
@@ -1008,7 +1064,11 @@ Expected: PASS (all tests in both test files)
 
 ```bash
 git add src/index.ts
-git commit -m "feat: add MCP server entry point"
+git commit -m "$(cat <<'EOF'
+feat: add MCP server entry point
+
+EOF
+)"
 ```
 
 ---
@@ -1105,7 +1165,11 @@ Expected: Output showing the Jenkins migration scenario with CI/CD alternatives,
 
 ```bash
 git add demo.ts
-git commit -m "feat: add Jenkins migration demo script"
+git commit -m "$(cat <<'EOF'
+feat: add Jenkins migration demo script
+
+EOF
+)"
 ```
 
 ---
@@ -1143,7 +1207,11 @@ Or test via `npx tsx src/index.ts` — it will block on stdin waiting for MCP me
 
 ```bash
 git add .
-git commit -m "chore: final build verification"
+git commit -m "$(cat <<'EOF'
+chore: final build verification
+
+EOF
+)"
 ```
 
 ---
