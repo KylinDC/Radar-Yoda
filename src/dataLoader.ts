@@ -63,13 +63,6 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
     if (volume === 34) vol34Entries = entries
   }
 
-  // Fuse.js index — search over latest volume only
-  const fuseIndex = new Fuse(vol34Entries, {
-    keys: ['name', 'description'],
-    threshold: 0.3,
-    includeScore: true,
-  })
-
   // historyMap — all volumes, sorted by volume ascending
   const historyMap = new Map<string, RadarEntry[]>()
   for (const entry of allEntries) {
@@ -81,6 +74,14 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
   for (const [key, entries] of historyMap) {
     historyMap.set(key, entries.sort((a, b) => a.volume - b.volume))
   }
+
+  // Fuse.js index — search over latest entry per technology (covers all volumes)
+  const latestEntries = [...historyMap.values()].map((entries) => entries[entries.length - 1])
+  const fuseIndex = new Fuse(latestEntries, {
+    keys: ['name', 'description'],
+    threshold: 0.3,
+    includeScore: true,
+  })
 
   // ringQuadrantMap — latest volume only, key = "ring:quadrant"
   const ringQuadrantMap = new Map<string, RadarEntry[]>()
