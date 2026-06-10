@@ -14,7 +14,9 @@ export function createSearchTechnologyTool(service: RadarService) {
   const tool = createTool({
     id: 'search_technology',
     description:
-      'Fuzzy-search for a technology by name or description. Returns up to 5 matching entries from the Thoughtworks Tech Radar (latest entry per technology). Optionally filter by ring or quadrant.',
+      'Call this when the user asks about a specific technology, wants to know its current Thoughtworks Tech Radar status, or mentions a technology name you need to look up. ' +
+      'Fuzzy-searches the latest radar (Vol.34) and returns up to 5 matching entries. ' +
+      'Optionally filter by ring (adopt/trial/assess/hold/caution) or quadrant.',
     inputSchema: z.object({
       context: z.object({
         query: z.string().describe('Technology name or keyword'),
@@ -33,7 +35,8 @@ export function createGetTechnologyHistoryTool(service: RadarService) {
   const tool = createTool({
     id: 'get_technology_history',
     description:
-      'Returns the ring-change history of a technology across all 34 Tech Radar volumes (Vol.01 2010 → Vol.34 2026), sorted oldest to newest.',
+      'Call this when the user asks how a technology has evolved over time, whether its adoption is growing or declining, or wants trend/momentum information. ' +
+      'Returns the ring-change history across all 34 Tech Radar volumes (Vol.01 2010 → Vol.34 2026), sorted oldest to newest.',
     inputSchema: z.object({
       context: z.object({
         name: z.string().describe('Exact technology name'),
@@ -50,7 +53,9 @@ export function createFindAlternativesTool(service: RadarService) {
   const tool = createTool({
     id: 'find_alternatives',
     description:
-      'Find Adopt/Trial technologies in the same quadrant as the given technology (Vol.34 only). Intended for migrating away from Hold/Caution technologies, but works for any ring.',
+      'Call this when the user asks "what should I use instead of X", wants to migrate away from a Hold or Caution technology, or needs replacement recommendations for a single technology. ' +
+      'Returns Adopt/Trial alternatives in the same quadrant (Vol.34). ' +
+      'For auditing an entire tech stack at once, use audit_tech_stack instead.',
     inputSchema: z.object({
       context: z.object({
         name: z.string().describe('Technology name to find alternatives for'),
@@ -67,7 +72,8 @@ export function createListByRingAndQuadrantTool(service: RadarService) {
   const tool = createTool({
     id: 'list_by_ring_and_quadrant',
     description:
-      'List all technologies from the latest Tech Radar (Vol.34) matching the given ring and/or quadrant, sorted by name.',
+      'Call this when the user asks what technologies Thoughtworks recommends in a specific ring or quadrant — for example "what tools are in Adopt?" or "show me all Assess-stage platforms". ' +
+      'Returns all matching technologies from Vol.34 sorted by name.',
     inputSchema: z.object({
       context: z.object({
         ring: RingSchema.optional(),
@@ -107,7 +113,9 @@ export function createCompareTechnologiesTool(service: RadarService) {
   const tool = createTool({
     id: 'compare_technologies',
     description:
-      'Side-by-side comparison of exactly two technologies: their current Vol.34 status and full history across all volumes.',
+      'Call this when the user wants to compare two or more specific technologies head-to-head — for example "React vs Svelte" or "Kafka vs Pulsar". ' +
+      'Returns their current Vol.34 ring status and full history side by side. ' +
+      'For evaluating an existing tech stack rather than comparing candidates, use audit_tech_stack instead.',
     inputSchema: z.object({
       context: z.object({
         names: z
