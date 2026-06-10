@@ -171,6 +171,16 @@ describe('RadarService.getTechnologyHistory', () => {
     }
   })
 
+  it('is case-insensitive', () => {
+    const result = service.getTechnologyHistory({ name: 'docker' })
+    expect(result).not.toBeNull()
+  })
+
+  it('returns canonical display name regardless of input casing', () => {
+    const result = service.getTechnologyHistory({ name: 'docker' })
+    expect(result!.name).toBe('Docker')
+  })
+
   it('returns null for unknown technology', () => {
     const result = service.getTechnologyHistory({ name: 'xyzzy123notreal' })
     expect(result).toBeNull()
@@ -207,6 +217,23 @@ describe('RadarService.findAlternatives', () => {
     expect(result!.warning).toBeDefined()
   })
 
+  it('falls back to historyMap for technologies dropped from latest volume', () => {
+    // Jenkins is not in Vol.34 but has history (last seen as "hold" in tools quadrant)
+    const result = service.findAlternatives({ name: 'Jenkins as a deployment pipeline' })
+    expect(result).not.toBeNull()
+    expect(result!.input.name).toBe('Jenkins as a deployment pipeline')
+    expect(result!.alternatives.length).toBeGreaterThan(0)
+    result!.alternatives.forEach((a) => {
+      expect(['adopt', 'trial']).toContain(a.ring)
+      expect(a.quadrant).toBe('tools')
+    })
+  })
+
+  it('historyMap fallback is case-insensitive', () => {
+    const result = service.findAlternatives({ name: 'jenkins as a deployment pipeline' })
+    expect(result).not.toBeNull()
+  })
+
   it('returns null for unknown technology', () => {
     const result = service.findAlternatives({ name: 'xyzzy123notreal' })
     expect(result).toBeNull()
@@ -235,5 +262,13 @@ describe('RadarService.compareTechnologies', () => {
     })
     expect(result.notFound).toContain('xyzzy123notreal')
     expect(result.entries.some((e) => e.name === 'DORA metrics')).toBe(true)
+  })
+
+  it('accepts more than two names', () => {
+    const result = service.compareTechnologies({
+      names: ['DORA metrics', 'Passkeys', 'Context engineering'],
+    })
+    expect(result.entries.length).toBe(3)
+    expect(result.histories.length).toBe(3)
   })
 })

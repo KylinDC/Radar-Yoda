@@ -97,5 +97,13 @@ describe('MCP Tools Integration', () => {
         'xyzzy123notreal'
       )
     })
+
+    it('accepts more than two names', async () => {
+      const tool = createCompareTechnologiesTool(service)
+      const result = await tool.execute({
+        context: { names: ['DORA metrics', 'Passkeys', 'Context engineering'] },
+      })
+      expect((result as { entries: unknown[] }).entries.length).toBe(3)
+    })
   })
 })
