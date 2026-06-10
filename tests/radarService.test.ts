@@ -171,6 +171,15 @@ describe('RadarService.getTechnologyHistory', () => {
     }
   })
 
+  it('includes description in each history entry', () => {
+    const result = service.getTechnologyHistory({ name: 'Docker' })
+    expect(result).not.toBeNull()
+    for (const entry of result!.history) {
+      expect(typeof entry.description).toBe('string')
+      expect(entry.description.length).toBeGreaterThan(0)
+    }
+  })
+
   it('is case-insensitive', () => {
     const result = service.getTechnologyHistory({ name: 'docker' })
     expect(result).not.toBeNull()

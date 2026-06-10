@@ -33,11 +33,15 @@ describe('MCP Tools Integration', () => {
   })
 
   describe('getTechnologyHistory tool', () => {
-    it('happy path — returns history for Docker', async () => {
+    it('happy path — returns history for Docker with description', async () => {
       const tool = createGetTechnologyHistoryTool(service)
       const result = await tool.execute({ context: { name: 'Docker' } })
       expect(result).not.toBeNull()
       expect((result as { name: string }).name).toBe('Docker')
+      const history = (result as { history: { description: string }[] }).history
+      expect(history.length).toBeGreaterThan(0)
+      expect(typeof history[0].description).toBe('string')
+      expect(history[0].description.length).toBeGreaterThan(0)
     })
 
     it('no-result path — returns null for unknown', async () => {

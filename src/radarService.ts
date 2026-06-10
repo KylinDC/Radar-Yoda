@@ -38,7 +38,7 @@ export class RadarService {
 
   getTechnologyHistory(input: { name: string }): {
     name: string
-    history: { volume: number; year: number; ring: Ring; status: string }[]
+    history: { volume: number; year: number; ring: Ring; status: string; description: string }[]
   } | null {
     const entries = this.index.historyMap.get(input.name.toLowerCase())
     if (!entries || entries.length === 0) return null
@@ -50,6 +50,7 @@ export class RadarService {
         year: e.year,
         ring: e.ring,
         status: e.status,
+        description: e.description,
       })),
     }
   }
