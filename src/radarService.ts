@@ -101,7 +101,7 @@ export class RadarService {
     notFound?: string[]
   } {
     const entries: RadarEntry[] = []
-    const histories: ReturnType<RadarService['getTechnologyHistory']>[] = []
+    const histories: NonNullable<ReturnType<RadarService['getTechnologyHistory']>>[] = []
     const notFound: string[] = []
 
     for (const name of input.names) {
