@@ -151,3 +151,87 @@ describe('RadarService.listByRingAndQuadrant', () => {
     expect(results.length).toBeGreaterThan(0)
   })
 })
+
+describe('RadarService.getTechnologyHistory', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns history for Docker sorted by volume ascending', () => {
+    const result = service.getTechnologyHistory({ name: 'Docker' })
+    expect(result).not.toBeNull()
+    expect(result!.history.length).toBeGreaterThan(1)
+    for (let i = 1; i < result!.history.length; i++) {
+      expect(result!.history[i].volume).toBeGreaterThan(result!.history[i - 1].volume)
+    }
+  })
+
+  it('returns null for unknown technology', () => {
+    const result = service.getTechnologyHistory({ name: 'xyzzy123notreal' })
+    expect(result).toBeNull()
+  })
+})
+
+describe('RadarService.findAlternatives', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns adopt/trial entries in the same quadrant as the input', () => {
+    // Find a hold/caution technology to test with
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'caution' })
+    if (holdEntries.length === 0) return // skip if no caution entries in vol34
+
+    const holdTech = holdEntries[0]
+    const result = service.findAlternatives({ name: holdTech.name })
+    expect(result).not.toBeNull()
+    result!.alternatives.forEach((a) => {
+      expect(['adopt', 'trial']).toContain(a.ring)
+      expect(a.quadrant).toBe(holdTech.quadrant)
+    })
+  })
+
+  it('returns a warning when input technology is not on Hold/Caution', () => {
+    const adoptEntries = service.listByRingAndQuadrant({ ring: 'adopt' })
+    const adoptTech = adoptEntries[0]
+    const result = service.findAlternatives({ name: adoptTech.name })
+    expect(result).not.toBeNull()
+    expect(result!.warning).toBeDefined()
+  })
+
+  it('returns null for unknown technology', () => {
+    const result = service.findAlternatives({ name: 'xyzzy123notreal' })
+    expect(result).toBeNull()
+  })
+})
+
+describe('RadarService.compareTechnologies', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns entries and histories for two known technologies', () => {
+    const result = service.compareTechnologies({
+      names: ['DORA metrics', 'React JS'],
+    })
+    expect(result.entries.length).toBeGreaterThan(0)
+    expect(result.histories.length).toBeGreaterThan(0)
+  })
+
+  it('lists missing names in notFound for unknown technology', () => {
+    const result = service.compareTechnologies({
+      names: ['DORA metrics', 'xyzzy123notreal'],
+    })
+    expect(result.notFound).toContain('xyzzy123notreal')
+    expect(result.entries.some((e) => e.name === 'DORA metrics')).toBe(true)
+  })
+})
