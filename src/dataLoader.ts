@@ -4,11 +4,15 @@ import { fileURLToPath } from 'url'
 import Fuse from 'fuse.js'
 import type { RadarEntry, RadarIndex, Ring, Quadrant } from './types.js'
 
-const DATA_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'tech-radar-json-data'
-)
+// Resolve DATA_DIR relative to the project root.
+// When running from src/ (vitest): go up 1 level.
+// When running from dist/src/ (production): go up 2 levels.
+// We detect this by checking whether the computed path exists.
+const _fileDir = dirname(fileURLToPath(import.meta.url))
+const _candidate1 = join(_fileDir, '..', 'tech-radar-json-data')
+const _candidate2 = join(_fileDir, '..', '..', 'tech-radar-json-data')
+import { existsSync } from 'fs'
+const DATA_DIR = existsSync(_candidate1) ? _candidate1 : _candidate2
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim()
