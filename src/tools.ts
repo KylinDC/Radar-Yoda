@@ -151,6 +151,34 @@ export function createGetTechnologyRiskScoreTool(service: RadarService) {
   return tool
 }
 
+export function createDraftADRTool(service: RadarService) {
+  const tool = createTool({
+    id: 'draft_adr',
+    description:
+      'Call this when the user wants to document a technology decision, compare candidate technologies for an ADR (Architecture Decision Record), or generate a structured decision document. ' +
+      'Given a decision title and 2+ technology options, returns a complete Markdown ADR draft with radar ring status, history, and trend evidence pre-filled for each option. ' +
+      'The TL/TP only needs to fill in the Decision and Consequences sections.',
+    inputSchema: z.object({
+      context: z.object({
+        title: z.string().describe('ADR title, e.g. "Select container orchestration platform"'),
+        options: z
+          .array(
+            z.object({
+              name: z.string().describe('Technology name'),
+              description: z.string().optional().describe('Optional TL note about this option'),
+            })
+          )
+          .min(1),
+        context: z.string().optional().describe('Problem statement or background context'),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.draftADR(context)
+    },
+  })
+  return tool
+}
+
 export function createGetTrendingTechnologiesTool(service: RadarService) {
   const tool = createTool({
     id: 'get_trending_technologies',

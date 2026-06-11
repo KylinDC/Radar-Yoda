@@ -428,6 +428,86 @@ describe('RadarService.getTechnologyRiskScore', () => {
   })
 })
 
+describe('RadarService.draftADR', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns an ADRDraft with markdown and options array', async () => {
+    const result = await service.draftADR({
+      title: 'Select container platform',
+      options: [{ name: 'Kubernetes' }, { name: 'Docker' }],
+    })
+    expect(result).toHaveProperty('markdown')
+    expect(result).toHaveProperty('options')
+    expect(typeof result.markdown).toBe('string')
+    expect(Array.isArray(result.options)).toBe(true)
+    expect(result.options).toHaveLength(2)
+  })
+
+  it('markdown contains the ADR title', async () => {
+    const result = await service.draftADR({
+      title: 'Choose a frontend framework',
+      options: [{ name: 'React JS' }],
+    })
+    expect(result.markdown).toContain('Choose a frontend framework')
+  })
+
+  it('markdown contains radar ring info for each option', async () => {
+    const result = await service.draftADR({
+      title: 'Test',
+      options: [{ name: 'Kubernetes' }, { name: 'Docker' }],
+    })
+    expect(result.markdown).toMatch(/Radar status \(Vol\.34\)/)
+    expect(result.markdown).toContain('Kubernetes')
+    expect(result.markdown).toContain('Docker')
+  })
+
+  it('includes TL note in markdown when description is provided', async () => {
+    const result = await service.draftADR({
+      title: 'Test',
+      options: [{ name: 'Kubernetes', description: 'Our current infra team knows it well' }],
+    })
+    expect(result.markdown).toContain('Our current infra team knows it well')
+  })
+
+  it('handles unknown technology gracefully — shows not found in radar', async () => {
+    const result = await service.draftADR({
+      title: 'Test',
+      options: [{ name: 'xyzzy123notreal' }],
+    })
+    expect(result.options[0].currentRing).toBe('unknown')
+    expect(result.markdown).toContain('not in radar')
+  })
+
+  it('includes context when provided', async () => {
+    const result = await service.draftADR({
+      title: 'Test',
+      options: [{ name: 'Docker' }],
+      context: 'We need to containerize our microservices',
+    })
+    expect(result.markdown).toContain('We need to containerize our microservices')
+  })
+
+  it('each option has required ADROption fields', async () => {
+    const result = await service.draftADR({
+      title: 'Test',
+      options: [{ name: 'Kubernetes' }],
+    })
+    const opt = result.options[0]
+    expect(opt).toHaveProperty('name')
+    expect(opt).toHaveProperty('currentRing')
+    expect(opt).toHaveProperty('quadrant')
+    expect(opt).toHaveProperty('historyLength')
+    expect(opt).toHaveProperty('latestMovement')
+    expect(opt).toHaveProperty('radarUrl')
+    expect(opt.radarUrl).toContain('thoughtworks.com')
+  })
+})
+
 describe('RadarService.getTrendingTechnologies', () => {
   let service: RadarService
 

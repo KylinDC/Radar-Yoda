@@ -1,4 +1,4 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth } from './types.js'
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth, ADRDraft, ADROption } from './types.js'
 import { NullExternalDataFetcher } from './externalDataFetcher.js'
 import type { ExternalDataFetcher } from './externalDataFetcher.js'
 
@@ -264,6 +264,102 @@ export class RadarService {
       githubHealth,
       cveCount,
     }
+  }
+
+  async draftADR(input: {
+    title: string
+    options: Array<{ name: string; description?: string }>
+    context?: string
+  }): Promise<ADRDraft> {
+    const today = new Date().toISOString().slice(0, 10)
+    const optionResults: ADROption[] = []
+    const optionSections: string[] = []
+
+    for (let i = 0; i < input.options.length; i++) {
+      const opt = input.options[i]
+
+      // Find current ring in Vol.34
+      let entry: RadarEntry | undefined
+      for (const list of this.index.ringQuadrantMap.values()) {
+        entry = list.find((e) => e.name.toLowerCase() === opt.name.toLowerCase())
+        if (entry) break
+      }
+
+      // Fall back to historyMap last entry
+      if (!entry) {
+        const history = this.index.historyMap.get(opt.name.toLowerCase())
+        if (history && history.length > 0) {
+          entry = history[history.length - 1]
+        }
+      }
+
+      const history = this.getTechnologyHistory({ name: opt.name })
+
+      const currentRing: Ring | 'unknown' = entry?.ring ?? 'unknown'
+      const quadrant: Quadrant | 'unknown' = entry?.quadrant ?? 'unknown'
+      const historyLength = history?.history.length ?? 0
+      const firstYear = history?.history[0]?.year ?? 'N/A'
+      const lastYear = history?.history[history.history.length - 1]?.year ?? 'N/A'
+      const latestEntry = history?.history[history.history.length - 1]
+      const latestMovement = latestEntry
+        ? `${latestEntry.status} (Vol.${latestEntry.volume})`
+        : 'no history'
+      const latestDesc = latestEntry?.description ?? ''
+
+      optionResults.push({
+        name: opt.name,
+        currentRing,
+        quadrant,
+        historyLength,
+        latestMovement,
+        radarUrl: 'https://www.thoughtworks.com/radar',
+      })
+
+      const ringDisplay = currentRing === 'unknown' ? 'not in radar' : `${currentRing} — ${quadrant}`
+      const historyDisplay =
+        historyLength > 0
+          ? `${historyLength} appearances across ${firstYear}–${lastYear}`
+          : 'not found in radar'
+
+      let section = `### Option ${i + 1}: ${opt.name}\n`
+      section += `- **Radar status (Vol.34):** ${ringDisplay}\n`
+      section += `- **History:** ${historyDisplay}\n`
+      section += `- **Recent movement:** ${latestMovement}\n`
+      if (latestDesc) section += `- **Description:** ${latestDesc}\n`
+      if (opt.description) section += `\n*TL note: ${opt.description}*`
+
+      optionSections.push(section)
+    }
+
+    const contextText = input.context ?? '[Describe the problem or opportunity here]'
+
+    const markdown = [
+      `# ADR: ${input.title}`,
+      '',
+      `**Date:** ${today}  `,
+      '**Status:** Proposed',
+      '',
+      '## Context',
+      '',
+      contextText,
+      '',
+      '## Options Considered',
+      '',
+      optionSections.join('\n\n'),
+      '',
+      '## Decision',
+      '',
+      '[To be filled]',
+      '',
+      '## Consequences',
+      '',
+      '[To be filled]',
+      '',
+      '---',
+      '*Radar evidence sourced from Thoughtworks Tech Radar Vol.01–34 via tech-radar-advisor MCP.*',
+    ].join('\n')
+
+    return { markdown, options: optionResults }
   }
 
   compareTechnologies(input: { names: string[] }): {
