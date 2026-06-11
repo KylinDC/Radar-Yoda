@@ -1,0 +1,10 @@
+node_modules/
+src/
+tests/
+infra/
+docs/
+.github/
+*.md
+.git/
+.mcp.json
+demo.ts
