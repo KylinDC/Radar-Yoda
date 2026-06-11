@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { RadarService } from './radarService.js'
+import type { TrendDirection } from './types.js'
 
 const RingSchema = z.enum(['adopt', 'trial', 'assess', 'hold', 'caution'])
 const QuadrantSchema = z.enum([
@@ -126,6 +127,27 @@ export function createCompareTechnologiesTool(service: RadarService) {
     }),
     execute: async ({ context }) => {
       return service.compareTechnologies(context)
+    },
+  })
+  return tool
+}
+
+export function createGetTrendingTechnologiesTool(service: RadarService) {
+  const tool = createTool({
+    id: 'get_trending_technologies',
+    description:
+      'Call this when the user asks which technologies are gaining or losing momentum, wants to know the tech landscape trend, or asks "what is rising / falling in the radar?". ' +
+      'Analyses all 34 radar volumes to classify technologies as rising (moving toward Adopt), falling (moving toward Hold/Caution), or stable. ' +
+      'Optionally filter by quadrant or direction.',
+    inputSchema: z.object({
+      context: z.object({
+        quadrant: QuadrantSchema.optional(),
+        direction: z.enum(['rising', 'falling', 'stable', 'all']).optional(),
+        limit: z.number().int().positive().optional(),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.getTrendingTechnologies(context)
     },
   })
   return tool

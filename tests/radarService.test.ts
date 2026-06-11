@@ -366,3 +366,63 @@ describe('RadarService.compareTechnologies', () => {
     expect(result.histories.length).toBe(3)
   })
 })
+
+describe('RadarService.getTrendingTechnologies', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns an object with a trending array', async () => {
+    const result = await service.getTrendingTechnologies({})
+    expect(result).toHaveProperty('trending')
+    expect(Array.isArray(result.trending)).toBe(true)
+  })
+
+  it('each entry has required fields', async () => {
+    const result = await service.getTrendingTechnologies({ limit: 5 })
+    for (const entry of result.trending) {
+      expect(entry).toHaveProperty('name')
+      expect(entry).toHaveProperty('quadrant')
+      expect(entry).toHaveProperty('currentRing')
+      expect(['rising', 'falling', 'stable']).toContain(entry.direction)
+      expect(typeof entry.slope).toBe('number')
+      expect(Array.isArray(entry.trajectory)).toBe(true)
+      expect(entry.trajectory.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('filters by direction — only rising entries when direction=rising', async () => {
+    const result = await service.getTrendingTechnologies({ direction: 'rising' })
+    for (const entry of result.trending) {
+      expect(entry.direction).toBe('rising')
+    }
+  })
+
+  it('filters by direction — only falling entries when direction=falling', async () => {
+    const result = await service.getTrendingTechnologies({ direction: 'falling' })
+    for (const entry of result.trending) {
+      expect(entry.direction).toBe('falling')
+    }
+  })
+
+  it('filters by quadrant', async () => {
+    const result = await service.getTrendingTechnologies({ quadrant: 'tools' })
+    for (const entry of result.trending) {
+      expect(entry.quadrant).toBe('tools')
+    }
+  })
+
+  it('respects limit', async () => {
+    const result = await service.getTrendingTechnologies({ limit: 3 })
+    expect(result.trending.length).toBeLessThanOrEqual(3)
+  })
+
+  it('returns empty array for unknown quadrant filter (no results)', async () => {
+    // @ts-expect-error testing invalid quadrant
+    const result = await service.getTrendingTechnologies({ quadrant: 'nonexistent' })
+    expect(result.trending).toHaveLength(0)
+  })
+})

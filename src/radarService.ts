@@ -1,6 +1,16 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult } from './types.js'
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry } from './types.js'
 import { NullExternalDataFetcher } from './externalDataFetcher.js'
 import type { ExternalDataFetcher } from './externalDataFetcher.js'
+
+function linearRegressionSlope(scores: number[]): number {
+  const n = scores.length
+  if (n < 2) return 0
+  const sumX = (n * (n - 1)) / 2
+  const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6
+  const sumY = scores.reduce((a, b) => a + b, 0)
+  const sumXY = scores.reduce((sum, y, i) => sum + i * y, 0)
+  return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+}
 
 type SearchInput = { query: string; quadrant?: Quadrant; ring?: Ring }
 type SearchResult = { results: RadarEntry[]; found: boolean }
@@ -154,6 +164,48 @@ export class RadarService {
     }
 
     return { summary, items, notFound }
+  }
+
+  async getTrendingTechnologies(input: {
+    quadrant?: Quadrant
+    direction?: TrendDirection | 'all'
+    limit?: number
+  }): Promise<{ trending: TrendingEntry[] }> {
+    const ringScore: Record<Ring, number> = { adopt: 1, trial: 2, assess: 3, hold: 4, caution: 4 }
+    const limit = input.limit ?? 10
+    const directionFilter = input.direction ?? 'all'
+
+    const results: TrendingEntry[] = []
+
+    for (const [key, entries] of this.index.historyMap) {
+      if (entries.length < 2) continue
+
+      const sorted = [...entries].sort((a, b) => a.volume - b.volume)
+      const last = sorted[sorted.length - 1]
+
+      if (input.quadrant && last.quadrant !== input.quadrant) continue
+
+      const recent = sorted.slice(-6)
+      const scores = recent.map((e) => ringScore[e.ring])
+      const slope = linearRegressionSlope(scores)
+
+      const direction: TrendDirection =
+        slope <= -0.1 ? 'rising' : slope >= 0.1 ? 'falling' : 'stable'
+
+      if (directionFilter !== 'all' && direction !== directionFilter) continue
+
+      results.push({
+        name: last.name,
+        quadrant: last.quadrant,
+        currentRing: last.ring,
+        direction,
+        slope,
+        trajectory: sorted.map((e) => ({ volume: e.volume, year: e.year, ring: e.ring })),
+      })
+    }
+
+    results.sort((a, b) => Math.abs(b.slope) - Math.abs(a.slope))
+    return { trending: results.slice(0, limit) }
   }
 
   compareTechnologies(input: { names: string[] }): {
