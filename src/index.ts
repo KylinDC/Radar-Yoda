@@ -1,6 +1,7 @@
 import { MCPServer } from '@mastra/mcp'
 import { buildRadarIndex } from './dataLoader.js'
 import { RadarService } from './radarService.js'
+import { HttpExternalDataFetcher } from './externalDataFetcher.js'
 import {
   createSearchTechnologyTool,
   createGetTechnologyHistoryTool,
@@ -8,11 +9,16 @@ import {
   createListByRingAndQuadrantTool,
   createCompareTechnologiesTool,
   createAuditTechStackTool,
+  createGetTrendingTechnologiesTool,
+  createGetTechnologyRiskScoreTool,
+  createDraftADRTool,
+  createGetMigrationRoadmapTool,
 } from './tools.js'
 
 async function main() {
   const index = await buildRadarIndex()
-  const service = new RadarService(index)
+  const fetcher = new HttpExternalDataFetcher()
+  const service = new RadarService(index, fetcher)
 
   const server = new MCPServer({
     name: 'tech-radar-advisor',
@@ -24,6 +30,10 @@ async function main() {
       listByRingAndQuadrant: createListByRingAndQuadrantTool(service),
       compareTechnologies: createCompareTechnologiesTool(service),
       auditTechStack: createAuditTechStackTool(service),
+      getTrendingTechnologies: createGetTrendingTechnologiesTool(service),
+      getTechnologyRiskScore: createGetTechnologyRiskScoreTool(service),
+      draftADR: createDraftADRTool(service),
+      getMigrationRoadmap: createGetMigrationRoadmapTool(service),
     },
   })
 

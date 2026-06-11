@@ -8,15 +8,20 @@ import {
   createListByRingAndQuadrantTool,
   createCompareTechnologiesTool,
   createAuditTechStackTool,
+  createGetTrendingTechnologiesTool,
+  createGetTechnologyRiskScoreTool,
+  createDraftADRTool,
+  createGetMigrationRoadmapTool,
 } from '../src/tools.js'
 
-describe('MCP Tools Integration', () => {
-  let service: RadarService
+let service: RadarService
 
-  beforeAll(async () => {
-    const index = await buildRadarIndex()
-    service = new RadarService(index)
-  })
+beforeAll(async () => {
+  const index = await buildRadarIndex()
+  service = new RadarService(index)
+})
+
+describe('MCP Tools Integration', () => {
 
   describe('searchTechnology tool', () => {
     it('happy path — finds Context engineering (in Vol.34)', async () => {
@@ -144,5 +149,73 @@ describe('MCP Tools Integration', () => {
       })
       expect((result as { entries: unknown[] }).entries.length).toBe(3)
     })
+  })
+})
+
+describe('getTrendingTechnologies tool', () => {
+  it('happy path — returns trending array', async () => {
+    const tool = createGetTrendingTechnologiesTool(service)
+    const result = await tool.execute({ context: {} })
+    expect(result).toHaveProperty('trending')
+    expect(Array.isArray((result as { trending: unknown[] }).trending)).toBe(true)
+  })
+
+  it('filters by direction=rising', async () => {
+    const tool = createGetTrendingTechnologiesTool(service)
+    const result = await tool.execute({ context: { direction: 'rising', limit: 5 } })
+    const trending = (result as { trending: Array<{ direction: string }> }).trending
+    trending.forEach((e) => expect(e.direction).toBe('rising'))
+  })
+})
+
+describe('getTechnologyRiskScore tool', () => {
+  it('happy path — returns risk score for Docker', async () => {
+    const tool = createGetTechnologyRiskScoreTool(service)
+    const result = await tool.execute({ context: { name: 'Docker' } })
+    expect(result).not.toBeNull()
+    expect((result as { name: string }).name).toBe('Docker')
+    expect(typeof (result as { riskScore: number }).riskScore).toBe('number')
+  })
+
+  it('returns null for unknown technology', async () => {
+    const tool = createGetTechnologyRiskScoreTool(service)
+    const result = await tool.execute({ context: { name: 'xyzzy123notreal' } })
+    expect(result).toBeNull()
+  })
+})
+
+describe('draftADR tool', () => {
+  it('happy path — returns markdown and options', async () => {
+    const tool = createDraftADRTool(service)
+    const result = await tool.execute({
+      context: {
+        title: 'Select orchestration platform',
+        options: [{ name: 'Kubernetes' }, { name: 'Docker' }],
+      },
+    })
+    expect((result as { markdown: string }).markdown).toContain('Select orchestration platform')
+    expect((result as { options: unknown[] }).options).toHaveLength(2)
+  })
+})
+
+describe('getMigrationRoadmap tool', () => {
+  it('happy path — returns roadmap with summary', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    if (holdEntries.length === 0) return
+    const tool = createGetMigrationRoadmapTool(service)
+    const result = await tool.execute({
+      context: { technologies: [holdEntries[0].name] },
+    })
+    expect(result).toHaveProperty('summary')
+    expect(result).toHaveProperty('roadmap')
+  })
+
+  it('returns empty roadmap for all-healthy stack', async () => {
+    const adoptEntries = service.listByRingAndQuadrant({ ring: 'adopt' })
+    const tool = createGetMigrationRoadmapTool(service)
+    const result = await tool.execute({
+      context: { technologies: adoptEntries.slice(0, 2).map((e) => e.name) },
+    })
+    expect((result as { roadmap: unknown[] }).roadmap).toHaveLength(0)
   })
 })
