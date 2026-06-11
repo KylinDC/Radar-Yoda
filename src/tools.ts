@@ -132,6 +132,25 @@ export function createCompareTechnologiesTool(service: RadarService) {
   return tool
 }
 
+export function createGetTechnologyRiskScoreTool(service: RadarService) {
+  const tool = createTool({
+    id: 'get_technology_risk_score',
+    description:
+      'Call this when the user wants to assess the risk of using a specific technology — combining radar ring position, GitHub maintenance health, and known CVE security vulnerabilities into a 0–10 composite score. ' +
+      'Also call this before making migration decisions to quantify urgency. ' +
+      'Returns null if the technology is not found in any radar volume.',
+    inputSchema: z.object({
+      context: z.object({
+        name: z.string().describe('Technology name to score'),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.getTechnologyRiskScore(context)
+    },
+  })
+  return tool
+}
+
 export function createGetTrendingTechnologiesTool(service: RadarService) {
   const tool = createTool({
     id: 'get_trending_technologies',

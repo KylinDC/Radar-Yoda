@@ -1,4 +1,4 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry } from './types.js'
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth } from './types.js'
 import { NullExternalDataFetcher } from './externalDataFetcher.js'
 import type { ExternalDataFetcher } from './externalDataFetcher.js'
 
@@ -206,6 +206,64 @@ export class RadarService {
 
     results.sort((a, b) => Math.abs(b.slope) - Math.abs(a.slope))
     return { trending: results.slice(0, limit) }
+  }
+
+  async getTechnologyRiskScore(input: { name: string }): Promise<RiskScore | null> {
+    // Look up in Vol.34 first, fall back to historyMap
+    let entry: RadarEntry | undefined
+    for (const list of this.index.ringQuadrantMap.values()) {
+      entry = list.find((e) => e.name.toLowerCase() === input.name.toLowerCase())
+      if (entry) break
+    }
+    if (!entry) {
+      const history = this.index.historyMap.get(input.name.toLowerCase())
+      if (!history || history.length === 0) return null
+      entry = history[history.length - 1]
+    }
+
+    const radarRiskMap: Record<Ring, number> = { adopt: 0, trial: 1, assess: 2, hold: 3, caution: 3 }
+    const radarRisk = radarRiskMap[entry.ring]
+
+    const githubHealth = await this.fetcher.fetchGitHubHealth(input.name)
+    let maintenanceScore: number
+    if (githubHealth === null) {
+      maintenanceScore = 3
+    } else if (githubHealth.stars > 10000 && githubHealth.lastCommitDaysAgo < 180) {
+      maintenanceScore = 0
+    } else if (githubHealth.stars >= 1000 || githubHealth.lastCommitDaysAgo <= 365) {
+      maintenanceScore = 1
+    } else if (githubHealth.stars >= 100 || githubHealth.lastCommitDaysAgo <= 730) {
+      maintenanceScore = 2
+    } else {
+      maintenanceScore = 3
+    }
+
+    const cveCount = await this.fetcher.fetchCVECount(input.name)
+    let securityScore: number
+    if (cveCount === null) {
+      securityScore = 3
+    } else if (cveCount === 0) {
+      securityScore = 0
+    } else if (cveCount <= 5) {
+      securityScore = 1
+    } else if (cveCount <= 20) {
+      securityScore = 2
+    } else {
+      securityScore = 3
+    }
+
+    return {
+      name: entry.name,
+      riskScore: Math.min(10, radarRisk + maintenanceScore + securityScore),
+      breakdown: {
+        radarRisk,
+        maintenanceRisk: githubHealth === null ? null : maintenanceScore,
+        securityRisk: cveCount === null ? null : securityScore,
+      },
+      currentRing: entry.ring,
+      githubHealth,
+      cveCount,
+    }
   }
 
   compareTechnologies(input: { names: string[] }): {

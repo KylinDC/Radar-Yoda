@@ -367,6 +367,67 @@ describe('RadarService.compareTechnologies', () => {
   })
 })
 
+describe('RadarService.getTechnologyRiskScore', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index) // NullExternalDataFetcher by default
+  })
+
+  it('returns a RiskScore object for a known technology', async () => {
+    const result = await service.getTechnologyRiskScore({ name: 'Docker' })
+    expect(result).not.toBeNull()
+    expect(result!.name).toBe('Docker')
+    expect(result!.riskScore).toBeGreaterThanOrEqual(0)
+    expect(result!.riskScore).toBeLessThanOrEqual(10)
+  })
+
+  it('breakdown.radarRisk is 0 for an Adopt technology', async () => {
+    const adoptEntries = service.listByRingAndQuadrant({ ring: 'adopt' })
+    expect(adoptEntries.length).toBeGreaterThan(0)
+    const result = await service.getTechnologyRiskScore({ name: adoptEntries[0].name })
+    expect(result!.breakdown.radarRisk).toBe(0)
+  })
+
+  it('breakdown.radarRisk is 3 for a Hold/Caution technology', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    if (holdEntries.length === 0) return
+    const result = await service.getTechnologyRiskScore({ name: holdEntries[0].name })
+    expect(result!.breakdown.radarRisk).toBe(3)
+  })
+
+  it('with NullExternalDataFetcher, breakdown fields are null but riskScore accounts for worst-case', async () => {
+    const adoptEntries = service.listByRingAndQuadrant({ ring: 'adopt' })
+    const result = await service.getTechnologyRiskScore({ name: adoptEntries[0].name })
+    expect(result!.githubHealth).toBeNull()
+    expect(result!.cveCount).toBeNull()
+    // breakdown fields are null when data is unavailable
+    expect(result!.breakdown.maintenanceRisk).toBeNull()
+    expect(result!.breakdown.securityRisk).toBeNull()
+    // riskScore = radarRisk(0 for adopt) + 3 (null maintenance) + 3 (null security) = 6
+    expect(result!.riskScore).toBe(6)
+  })
+
+  it('returns null for an unknown technology', async () => {
+    const result = await service.getTechnologyRiskScore({ name: 'xyzzy123notreal' })
+    expect(result).toBeNull()
+  })
+
+  it('riskScore increases when CVE count is high', async () => {
+    const { NullExternalDataFetcher } = await import('../src/externalDataFetcher.js')
+    class HighCVEFetcher extends NullExternalDataFetcher {
+      override async fetchCVECount(_name: string) { return 25 } // > 20 → securityRisk=3
+    }
+    const index = await buildRadarIndex()
+    const svc = new RadarService(index, new HighCVEFetcher())
+    const adoptEntries = svc.listByRingAndQuadrant({ ring: 'adopt' })
+    const result = await svc.getTechnologyRiskScore({ name: adoptEntries[0].name })
+    expect(result!.breakdown.securityRisk).toBe(3)
+    expect(result!.cveCount).toBe(25)
+  })
+})
+
 describe('RadarService.getTrendingTechnologies', () => {
   let service: RadarService
 
