@@ -45,3 +45,58 @@ export interface RadarIndex {
   historyMap: Map<string, RadarEntry[]>
   ringQuadrantMap: Map<string, RadarEntry[]>
 }
+
+export type TrendDirection = 'rising' | 'falling' | 'stable'
+
+export interface TrendingEntry {
+  name: string
+  quadrant: Quadrant
+  currentRing: Ring
+  direction: TrendDirection
+  slope: number
+  trajectory: Array<{ volume: number; year: number; ring: Ring }>
+}
+
+export interface RiskScore {
+  name: string
+  riskScore: number
+  breakdown: {
+    radarRisk: number
+    maintenanceRisk: number | null
+    securityRisk: number | null
+  }
+  currentRing: Ring | 'unknown'
+  githubHealth: import('./externalDataFetcher.js').GitHubHealth | null
+  cveCount: number | null
+}
+
+export interface ADROption {
+  name: string
+  currentRing: Ring | 'unknown'
+  quadrant: Quadrant | 'unknown'
+  historyLength: number
+  latestMovement: string
+  radarUrl: string
+}
+
+export interface ADRDraft {
+  markdown: string
+  options: ADROption[]
+}
+
+export interface RoadmapItem {
+  priority: number
+  name: string
+  currentRing: Ring
+  quadrant: Quadrant
+  riskScore: number
+  action: 'migrate' | 'monitor'
+  effort: 'low' | 'medium' | 'high'
+  suggestedAlternatives: RadarEntry[]
+  rationale: string
+}
+
+export interface MigrationRoadmap {
+  summary: { total: number; criticalMigrations: number; monitored: number }
+  roadmap: RoadmapItem[]
+}
