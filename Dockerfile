@@ -13,6 +13,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY tech-radar-json-data ./tech-radar-json-data
-ENV PORT=8080
+ENV NODE_ENV=production \
+    PORT=8080
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 EXPOSE 8080
 CMD ["node", "dist/src/index.js"]
