@@ -1,4 +1,6 @@
 import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult } from './types.js'
+import { NullExternalDataFetcher } from './externalDataFetcher.js'
+import type { ExternalDataFetcher } from './externalDataFetcher.js'
 
 type SearchInput = { query: string; quadrant?: Quadrant; ring?: Ring }
 type SearchResult = { results: RadarEntry[]; found: boolean }
@@ -6,7 +8,10 @@ type SearchResult = { results: RadarEntry[]; found: boolean }
 type ListInput = { ring?: Ring; quadrant?: Quadrant }
 
 export class RadarService {
-  constructor(private readonly index: RadarIndex) {}
+  constructor(
+    private readonly index: RadarIndex,
+    private readonly fetcher: ExternalDataFetcher = new NullExternalDataFetcher()
+  ) {}
 
   searchTechnology(input: SearchInput): SearchResult {
     const raw = this.index.fuseIndex.search(input.query)
