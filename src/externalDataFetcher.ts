@@ -1,8 +1,6 @@
-export interface GitHubHealth {
-  stars: number
-  lastCommitDaysAgo: number
-  openIssues: number
-}
+import type { GitHubHealth } from './types.js'
+
+export type { GitHubHealth }
 
 export interface ExternalDataFetcher {
   fetchGitHubHealth(name: string): Promise<GitHubHealth | null>

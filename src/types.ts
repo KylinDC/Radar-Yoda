@@ -57,6 +57,12 @@ export interface TrendingEntry {
   trajectory: Array<{ volume: number; year: number; ring: Ring }>
 }
 
+export interface GitHubHealth {
+  stars: number
+  lastCommitDaysAgo: number
+  openIssues: number
+}
+
 export interface RiskScore {
   name: string
   riskScore: number
@@ -66,7 +72,7 @@ export interface RiskScore {
     securityRisk: number | null
   }
   currentRing: Ring | 'unknown'
-  githubHealth: import('./externalDataFetcher.js').GitHubHealth | null
+  githubHealth: GitHubHealth | null
   cveCount: number | null
 }
 
