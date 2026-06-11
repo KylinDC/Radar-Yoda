@@ -104,34 +104,33 @@ Uses `list_by_ring_and_quadrant` with `ring: adopt, quadrant: platforms`. Return
 ```bash
 npm install
 npm run build
+node dist/src/index.js        # default port 3000
+PORT=8080 node dist/src/index.js  # custom port
 ```
 
-Add to `.mcp.json` in your project root:
+Connect any MCP client via URL:
 
 ```json
 {
   "mcpServers": {
     "tech-radar-advisor": {
-      "command": "node",
-      "args": ["dist/src/index.js"],
-      "cwd": "/path/to/this/repo"
+      "url": "http://localhost:3000/mcp"
     }
   }
 }
 ```
 
-For development (no build step):
+### Endpoints
 
-```json
-{
-  "mcpServers": {
-    "tech-radar-advisor": {
-      "command": "npx",
-      "args": ["tsx", "src/index.ts"],
-      "cwd": "/path/to/this/repo"
-    }
-  }
-}
+| Path | Purpose |
+|---|---|
+| `GET /health` | Health check — returns `{"status":"ok"}` |
+| `POST /mcp` | MCP Streamable HTTP transport |
+
+### Development (no build step)
+
+```bash
+npx tsx src/index.ts
 ```
 
 Optional — set `GITHUB_TOKEN` in the server environment to increase GitHub API rate limits (60 → 5,000 requests/hour):

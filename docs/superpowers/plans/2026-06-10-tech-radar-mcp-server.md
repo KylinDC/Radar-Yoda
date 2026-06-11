@@ -1011,10 +1011,14 @@ EOF
 
 ## Task 7: MCP Server Entry Point
 
+> **Note:** This task describes the initial stdio-only entry point. HTTP transport support was added later in Task 11.
+
 **Files:**
 - Create: `src/index.ts`
 
-- [ ] **Step 1: Create `src/index.ts`**
+- [x] **Step 1: Create `src/index.ts`**
+
+Initial implementation — stdio transport only:
 
 ```typescript
 import { MCPServer } from '@mastra/mcp'
@@ -1050,17 +1054,17 @@ async function main() {
 main().catch(console.error)
 ```
 
-- [ ] **Step 2: Verify it compiles**
+- [x] **Step 2: Verify it compiles**
 
 Run: `npm run build`
 Expected: `dist/` directory created, no TypeScript errors.
 
-- [ ] **Step 3: Run all tests**
+- [x] **Step 3: Run all tests**
 
 Run: `npx vitest run`
 Expected: PASS (all tests in both test files)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/index.ts
@@ -1188,20 +1192,26 @@ Expected: `dist/` built with no TypeScript errors.
 
 - [ ] **Step 3: Smoke-test the server (optional but recommended)**
 
-To connect to Claude Desktop, add this to your `claude_desktop_config.json`:
+**stdio mode** — connect to Claude Code or Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "tech-radar-advisor": {
       "command": "node",
-      "args": ["/path/to/GlobalHack-Radar-Yoda-Server/dist/index.js"]
+      "args": ["/path/to/GlobalHack-Radar-Yoda-Server/dist/src/index.js"]
     }
   }
 }
 ```
 
-Or test via `npx tsx src/index.ts` — it will block on stdin waiting for MCP messages, which confirms the server starts correctly.
+**HTTP mode** — start locally and hit the health endpoint:
+
+```bash
+MCP_TRANSPORT=http PORT=3099 node dist/src/index.js &
+curl http://localhost:3099/health   # → {"status":"ok"}
+kill %1
+```
 
 - [ ] **Step 4: Final commit**
 
@@ -1551,6 +1561,136 @@ Expected: PASS (53 tests across both test files, zero failures).
 
 ---
 
+## Task 11: HTTP Transport for Remote Deployment
+
+**Goal:** Replace stdio startup with an always-on HTTP server using `MCPServer.startHTTP()`. Default port is `3000`, overridable via `PORT` env var.
+
+**Context:** `@mastra/mcp`'s `MCPServer.startHTTP()` is a per-request handler, not a standalone server starter — a Node.js `http.createServer` wrapper is required. stdio mode has been removed; all clients connect via URL. The `/health` endpoint is needed for startup probes.
+
+**Files:**
+- Modify: `src/index.ts`
+- Modify: `.mcp.json`
+
+---
+
+- [x] **Step 1: Rewrite `src/index.ts` as HTTP-only server**
+
+```typescript
+#!/usr/bin/env node
+import http from 'node:http'
+import { randomUUID } from 'node:crypto'
+import { MCPServer } from '@mastra/mcp'
+import { buildRadarIndex } from './dataLoader.js'
+import { RadarService } from './radarService.js'
+import {
+  createSearchTechnologyTool,
+  createGetTechnologyHistoryTool,
+  createFindAlternativesTool,
+  createListByRingAndQuadrantTool,
+  createCompareTechnologiesTool,
+  createAuditTechStackTool,
+} from './tools.js'
+
+const MCP_PATH = '/mcp'
+const port = parseInt(process.env.PORT ?? '3000', 10)
+
+async function main() {
+  const index = await buildRadarIndex()
+  const service = new RadarService(index)
+
+  const mcpServer = new MCPServer({
+    name: 'tech-radar-advisor',
+    version: '0.0.1',
+    tools: {
+      searchTechnology: createSearchTechnologyTool(service),
+      getTechnologyHistory: createGetTechnologyHistoryTool(service),
+      findAlternatives: createFindAlternativesTool(service),
+      listByRingAndQuadrant: createListByRingAndQuadrantTool(service),
+      compareTechnologies: createCompareTechnologiesTool(service),
+      auditTechStack: createAuditTechStackTool(service),
+    },
+  })
+
+  const httpServer = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? '/', `http://localhost:${port}`)
+
+    if (url.pathname === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ status: 'ok' }))
+      return
+    }
+
+    if (url.pathname === MCP_PATH) {
+      await mcpServer.startHTTP({
+        url,
+        httpPath: MCP_PATH,
+        req,
+        res,
+        options: { sessionIdGenerator: () => randomUUID() },
+      })
+      return
+    }
+
+    res.writeHead(404)
+    res.end()
+  })
+
+  httpServer.listen(port, () => {
+    console.error(`Tech Radar Advisor listening on port ${port}`)
+    console.error(`MCP endpoint: http://localhost:${port}${MCP_PATH}`)
+  })
+}
+
+main().catch(console.error)
+```
+
+**Endpoints:**
+
+| Path | Purpose |
+|---|---|
+| `GET /health` | Health check / startup probe — returns `{"status":"ok"}` |
+| `POST /mcp` | MCP Streamable HTTP transport |
+
+**Port:**
+
+| `PORT` env var | Result |
+|---|---|
+| unset | listens on `3000` (default) |
+| set | listens on specified port (the platform injects `8080`) |
+
+- [x] **Step 2: Update `.mcp.json` to use URL mode**
+
+```json
+{
+  "mcpServers": {
+    "tech-radar-advisor": {
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+- [x] **Step 3: Build and verify**
+
+Run: `npm run build`
+Expected: compiles with no TypeScript errors.
+
+- [x] **Step 4: Smoke-test locally**
+
+```bash
+node dist/src/index.js &
+sleep 1
+curl -s http://localhost:3000/health   # → {"status":"ok"}
+kill %1
+```
+
+- [x] **Step 5: Run all tests**
+
+Run: `npx vitest run`
+Expected: 53 tests pass, zero failures.
+
+---
+
 ## Self-Review Checklist
 
 ### Spec Coverage
@@ -1580,5 +1720,9 @@ Expected: PASS (53 tests across both test files, zero failures).
 | Integration tests via tool execute | Task 6 + 10 |
 | Demo script Jenkins scenario | Task 8 |
 | MCPServer stdio startup | Task 7 |
+| HTTP-only server via `MCPServer.startHTTP()` | Task 11 |
+| `/health` endpoint for startup probe | Task 11 |
+| `PORT` env var respected, default `3000` | Task 11 |
+| `.mcp.json` uses `url` mode for local connection | Task 11 |
 
 All requirements covered. ✓
