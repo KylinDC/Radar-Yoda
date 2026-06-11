@@ -1,4 +1,4 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth, ADRDraft, ADROption } from './types.js'
+import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth, ADRDraft, ADROption, MigrationRoadmap, RoadmapItem } from './types.js'
 import { NullExternalDataFetcher } from './externalDataFetcher.js'
 import type { ExternalDataFetcher } from './externalDataFetcher.js'
 
@@ -397,6 +397,68 @@ export class RadarService {
       entries,
       histories,
       ...(notFound.length > 0 ? { notFound } : {}),
+    }
+  }
+
+  async getMigrationRoadmap(input: { technologies: string[] }): Promise<MigrationRoadmap> {
+    const audit = this.auditTechStack({ technologies: input.technologies })
+    const actionItems = audit.items.filter((i) => i.status === 'migrate' || i.status === 'monitor')
+
+    // Compute risk scores in parallel
+    const scored = await Promise.all(
+      actionItems.map(async (item) => {
+        const risk = await this.getTechnologyRiskScore({ name: item.name })
+        return { item, riskScore: risk?.riskScore ?? 6 }
+      })
+    )
+
+    // Sort by riskScore desc, then by ring severity (caution > hold > assess)
+    const ringSeverity: Partial<Record<string, number>> = { caution: 3, hold: 2, assess: 1 }
+    scored.sort((a, b) => {
+      if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore
+      return (ringSeverity[b.item.ring as string] ?? 0) - (ringSeverity[a.item.ring as string] ?? 0)
+    })
+
+    const roadmap: RoadmapItem[] = scored.map(({ item, riskScore }, idx) => {
+      const action: 'migrate' | 'monitor' = item.status === 'migrate' ? 'migrate' : 'monitor'
+      const quadrant = item.quadrant!
+
+      let effort: 'low' | 'medium' | 'high'
+      if (quadrant === 'platforms' || quadrant === 'tools' || riskScore >= 7) {
+        effort = 'high'
+      } else if (riskScore >= 4) {
+        effort = 'medium'
+      } else {
+        effort = 'low'
+      }
+
+      const alts = action === 'migrate' ? (item.alternatives ?? []) : []
+      const altNames = alts.map((a) => a.name).join(', ')
+      const rationale =
+        action === 'migrate'
+          ? `${item.name} is in the ${item.ring} ring (risk: ${riskScore}/10).${altNames ? ` Recommended alternatives: ${altNames}.` : ''}`
+          : `${item.name} is in the assess ring (risk: ${riskScore}/10). Monitor for movement in future radar volumes.`
+
+      return {
+        priority: idx + 1,
+        name: item.name,
+        currentRing: item.ring as Ring,
+        quadrant,
+        riskScore,
+        action,
+        effort,
+        suggestedAlternatives: alts,
+        rationale,
+      }
+    })
+
+    return {
+      summary: {
+        total: roadmap.length,
+        criticalMigrations: roadmap.filter((r) => r.action === 'migrate').length,
+        monitored: roadmap.filter((r) => r.action === 'monitor').length,
+      },
+      roadmap,
     }
   }
 }

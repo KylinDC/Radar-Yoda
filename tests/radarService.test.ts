@@ -567,3 +567,92 @@ describe('RadarService.getTrendingTechnologies', () => {
     expect(result.trending).toHaveLength(0)
   })
 })
+
+describe('RadarService.getMigrationRoadmap', () => {
+  let service: RadarService
+
+  beforeAll(async () => {
+    const index = await buildRadarIndex()
+    service = new RadarService(index)
+  })
+
+  it('returns a MigrationRoadmap with summary and roadmap array', async () => {
+    const result = await service.getMigrationRoadmap({
+      technologies: ['Kubernetes', 'Docker'],
+    })
+    expect(result).toHaveProperty('summary')
+    expect(result).toHaveProperty('roadmap')
+    expect(Array.isArray(result.roadmap)).toBe(true)
+  })
+
+  it('excludes healthy (adopt/trial) technologies from the roadmap', async () => {
+    const adoptEntries = service.listByRingAndQuadrant({ ring: 'adopt' })
+    const adoptNames = adoptEntries.slice(0, 3).map((e) => e.name)
+    const result = await service.getMigrationRoadmap({ technologies: adoptNames })
+    expect(result.roadmap).toHaveLength(0)
+    expect(result.summary.criticalMigrations).toBe(0)
+    expect(result.summary.monitored).toBe(0)
+  })
+
+  it('includes hold/caution technologies as migrate action', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    if (holdEntries.length === 0) return
+    const result = await service.getMigrationRoadmap({ technologies: [holdEntries[0].name] })
+    expect(result.roadmap.length).toBeGreaterThan(0)
+    expect(result.roadmap[0].action).toBe('migrate')
+    expect(result.summary.criticalMigrations).toBe(1)
+  })
+
+  it('includes assess technologies as monitor action', async () => {
+    const assessEntries = service.listByRingAndQuadrant({ ring: 'assess' })
+    if (assessEntries.length === 0) return
+    const result = await service.getMigrationRoadmap({ technologies: [assessEntries[0].name] })
+    expect(result.roadmap.length).toBeGreaterThan(0)
+    expect(result.roadmap[0].action).toBe('monitor')
+    expect(result.summary.monitored).toBe(1)
+  })
+
+  it('roadmap items are sorted by riskScore descending', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    const assessEntries = service.listByRingAndQuadrant({ ring: 'assess' })
+    const names = [
+      ...holdEntries.slice(0, 2).map((e) => e.name),
+      ...assessEntries.slice(0, 2).map((e) => e.name),
+    ]
+    if (names.length < 2) return
+    const result = await service.getMigrationRoadmap({ technologies: names })
+    for (let i = 1; i < result.roadmap.length; i++) {
+      expect(result.roadmap[i - 1].riskScore).toBeGreaterThanOrEqual(result.roadmap[i].riskScore)
+    }
+  })
+
+  it('each roadmap item has required fields', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    if (holdEntries.length === 0) return
+    const result = await service.getMigrationRoadmap({ technologies: [holdEntries[0].name] })
+    const item = result.roadmap[0]
+    expect(item).toHaveProperty('priority')
+    expect(item).toHaveProperty('name')
+    expect(item).toHaveProperty('currentRing')
+    expect(item).toHaveProperty('quadrant')
+    expect(item).toHaveProperty('riskScore')
+    expect(['migrate', 'monitor']).toContain(item.action)
+    expect(['low', 'medium', 'high']).toContain(item.effort)
+    expect(Array.isArray(item.suggestedAlternatives)).toBe(true)
+    expect(typeof item.rationale).toBe('string')
+    expect(item.rationale.length).toBeGreaterThan(0)
+  })
+
+  it('roadmap items have 1-based priority ranking starting at 1', async () => {
+    const holdEntries = service.listByRingAndQuadrant({ ring: 'hold' })
+    const assessEntries = service.listByRingAndQuadrant({ ring: 'assess' })
+    const names = [
+      ...holdEntries.slice(0, 2).map((e) => e.name),
+      ...assessEntries.slice(0, 1).map((e) => e.name),
+    ]
+    const result = await service.getMigrationRoadmap({ technologies: names })
+    result.roadmap.forEach((item, idx) => {
+      expect(item.priority).toBe(idx + 1)
+    })
+  })
+})

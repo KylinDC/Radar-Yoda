@@ -179,6 +179,29 @@ export function createDraftADRTool(service: RadarService) {
   return tool
 }
 
+export function createGetMigrationRoadmapTool(service: RadarService) {
+  const tool = createTool({
+    id: 'get_migration_roadmap',
+    description:
+      'Call this when the user wants a prioritised migration plan for their tech stack, asks "what should we migrate first", or needs an ordered list of tech debt to address. ' +
+      'Combines radar ring status and composite risk scores (GitHub health + CVE data) to rank technologies by urgency. ' +
+      'Returns only technologies that need action (hold/caution → migrate; assess → monitor); skips healthy ones. ' +
+      'For auditing without prioritisation, use audit_tech_stack instead.',
+    inputSchema: z.object({
+      context: z.object({
+        technologies: z
+          .array(z.string())
+          .min(1)
+          .describe('List of technology names to generate a migration roadmap for'),
+      }),
+    }),
+    execute: async ({ context }) => {
+      return service.getMigrationRoadmap(context)
+    },
+  })
+  return tool
+}
+
 export function createGetTrendingTechnologiesTool(service: RadarService) {
   const tool = createTool({
     id: 'get_trending_technologies',
