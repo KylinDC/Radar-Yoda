@@ -30,20 +30,26 @@ export class HttpExternalDataFetcher implements ExternalDataFetcher {
       const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
       if (process.env.GITHUB_TOKEN) headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`
 
-      const res = await this.fetch(
-        `https://api.github.com/search/repositories?q=${encodeURIComponent(name)}+in:name&sort=stars&per_page=1`,
-        { headers }
-      )
-      if (!res.ok) return null
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      try {
+        const res = await this.fetch(
+          `https://api.github.com/search/repositories?q="${encodeURIComponent(name)}"+in:name&stars:>1000&sort=stars&per_page=1`,
+          { headers, signal: controller.signal }
+        )
+        if (!res.ok) return null
 
-      const data = (await res.json()) as { items?: Array<{ stargazers_count: number; open_issues_count: number; pushed_at: string }> }
-      const repo = data.items?.[0]
-      if (!repo) return null
+        const data = (await res.json()) as { items?: Array<{ stargazers_count: number; open_issues_count: number; pushed_at: string }> }
+        const repo = data.items?.[0]
+        if (!repo) return null
 
-      const lastCommitDaysAgo = Math.floor(
-        (Date.now() - new Date(repo.pushed_at).getTime()) / (1000 * 60 * 60 * 24)
-      )
-      return { stars: repo.stargazers_count, lastCommitDaysAgo, openIssues: repo.open_issues_count }
+        const lastCommitDaysAgo = Math.floor(
+          (Date.now() - new Date(repo.pushed_at).getTime()) / (1000 * 60 * 60 * 24)
+        )
+        return { stars: repo.stargazers_count, lastCommitDaysAgo, openIssues: repo.open_issues_count }
+      } finally {
+        clearTimeout(timeoutId)
+      }
     } catch {
       return null
     }
@@ -51,15 +57,22 @@ export class HttpExternalDataFetcher implements ExternalDataFetcher {
 
   async fetchCVECount(name: string): Promise<number | null> {
     try {
-      const res = await this.fetch('https://api.osv.dev/v1/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package: { name } }),
-      })
-      if (!res.ok) return null
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      try {
+        const res = await this.fetch('https://api.osv.dev/v1/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ package: { name } }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return null
 
-      const data = (await res.json()) as { vulns?: unknown[] }
-      return data.vulns?.length ?? 0
+        const data = (await res.json()) as { vulns?: unknown[] }
+        return data.vulns?.length ?? 0
+      } finally {
+        clearTimeout(timeoutId)
+      }
     } catch {
       return null
     }

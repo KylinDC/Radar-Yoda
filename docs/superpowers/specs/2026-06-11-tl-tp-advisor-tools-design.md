@@ -1,7 +1,7 @@
 # TL/TP Tech Advisor — Four New MCP Tools Design Spec
 
 **Date:** 2026-06-11  
-**Status:** Draft  
+**Status:** Implemented  
 **Author:** KylinDC
 
 ---
@@ -48,7 +48,7 @@ DataLoader → RadarIndex ← RadarService ← MCP Tools (src/index.ts)
 
 | File | Changes |
 |------|---------|
-| `src/types.ts` | New types: `TrendDirection`, `TrendingEntry`, `RiskScore`, `ADRDraft`, `MigrationRoadmap`, `RoadmapItem` |
+| `src/types.ts` | New types: `GitHubHealth`, `TrendDirection`, `TrendingEntry`, `RiskScore`, `ADRDraft`, `ADROption`, `MigrationRoadmap`, `RoadmapItem` |
 | `src/radarService.ts` | Constructor gains optional second parameter `fetcher: ExternalDataFetcher` (defaults to `NullExternalDataFetcher`); four new async methods |
 | `src/tools.ts` | Four new `createXxxTool()` factory functions |
 | `src/index.ts` | Wire new tools into `MCPServer` |
@@ -59,22 +59,20 @@ DataLoader → RadarIndex ← RadarService ← MCP Tools (src/index.ts)
 
 ```typescript
 // src/externalDataFetcher.ts
-export interface GitHubHealth {
-  stars: number
-  lastCommitDaysAgo: number
-  openIssues: number
-}
-
 export interface ExternalDataFetcher {
-  fetchGitHubHealth(repoOrName: string): Promise<GitHubHealth | null>
+  fetchGitHubHealth(name: string): Promise<GitHubHealth | null>
   fetchCVECount(name: string): Promise<number | null>
 }
 ```
 
+`GitHubHealth` is defined in `src/types.ts` (not `externalDataFetcher.ts`) since it is a shared data type used by `RiskScore`.
+
 **Implementation notes:**
-- GitHub: `GET https://api.github.com/search/repositories?q={name}+in:name&sort=stars` — take first result. Requires `GITHUB_TOKEN` env var if set; falls back to unauthenticated (60 req/hr limit). On any error, return `null`.
+- GitHub: `GET https://api.github.com/search/repositories?q="{name}"+in:name&stars:>1000&sort=stars&per_page=1` — quote the name and filter to repos with >1000 stars to reduce noise from low-quality matches. Takes the first result. Requires `GITHUB_TOKEN` env var if set (raises rate limit from 60 to 5000 req/hr). On any error, return `null`.
 - CVE: `POST https://api.osv.dev/v1/query` with `{ package: { name } }` — return `response.vulns.length`. On any error, return `null`.
-- A `NullExternalDataFetcher` implementation returns `null` for all calls; used in tests and when external calls are disabled.
+- Both calls use a 5-second `AbortSignal` timeout. Timeout is treated as an error → returns `null`.
+- A `NullExternalDataFetcher` implementation returns `null` for all calls; used in tests and as the default.
+- **Known limitation:** GitHub health data is name-based search. Radar names like "Go language" or "React JS" may not match canonical repo names exactly. `maintenanceRisk` is only 0–3 out of 10, so inaccuracy has bounded impact. A caveat is included in the `get_technology_risk_score` tool description.
 
 ---
 
@@ -96,8 +94,9 @@ Identify technologies whose radar ring has changed meaningfully across recent vo
 1. Iterate `historyMap` (all technologies, all 34 volumes)
 2. For each technology with ≥ 2 appearances, map ring to numeric score: `adopt=1, trial=2, assess=3, hold=4, caution=4`
 3. Take the last 6 *appearances* (entries in `historyMap`, sorted by volume) for slope calculation, or all appearances if fewer than 6. Compute linear regression slope over the ring scores.
-4. Classify: slope ≤ −0.1 → `rising` (moving toward adopt); slope ≥ +0.1 → `falling`; otherwise `stable`
-5. Apply quadrant and direction filters; sort by |slope| descending; trim to `limit`
+4. Classify: slope ≤ −0.05 → `rising` (moving toward adopt); slope ≥ +0.05 → `falling`; otherwise `stable`. The threshold is ±0.05 (not ±0.1) because radar data is sparse — most technologies appear only 2–6 times — making slopes rarely steep.
+5. Quadrant filter is applied against the technology's most recent appearance (canonical quadrant).
+6. Apply direction filter; sort by |slope| descending; trim to `limit`
 
 ### Output
 ```typescript
@@ -136,6 +135,7 @@ Return a composite 0–10 risk score for a single technology, combining radar ri
 4. Security risk component (0–3): call `fetcher.fetchCVECount(name)`
    - 0 CVEs → 0; 1–5 → 1; 6–20 → 2; > 20 → 3
 5. Total = radarRisk + maintenanceRisk + securityRisk (max 10, min 0)
+6. `breakdown.maintenanceRisk` and `breakdown.securityRisk` are `null` when the fetcher returned `null` (data unavailable), even though the score still uses 3 (worst-case) for those components.
 
 ### Output
 ```typescript
@@ -144,8 +144,8 @@ Return a composite 0–10 risk score for a single technology, combining radar ri
   riskScore: number            // 0–10
   breakdown: {
     radarRisk: number          // 0–4
-    maintenanceRisk: number    // 0–3, or null if data unavailable
-    securityRisk: number       // 0–3, or null if data unavailable
+    maintenanceRisk: number | null   // null if GitHub data unavailable
+    securityRisk: number | null      // null if CVE data unavailable
   }
   currentRing: Ring | 'unknown'
   githubHealth: GitHubHealth | null
@@ -167,15 +167,15 @@ Given a decision title and candidate options (technologies), produce a Markdown 
   options: Array<{
     name: string                          // technology name
     description?: string                 // brief note from the TL
-  }>
+  }>                                      // minimum 2 options (ADR semantics require comparison)
   context?: string                        // optional free-text problem statement
 }
 ```
 
 ### Logic (in `RadarService.draftADR`)
 1. For each option: call `getTechnologyHistory({ name })` and look up current ring in `ringQuadrantMap`
-2. Build a structured `ADRDraft` object
-3. Render to Markdown using a fixed template (see below) — the template is pure string interpolation, no LLM call
+2. For unknown technologies: `currentRing = 'unknown'`, ring display shows "not in radar"
+3. Render to Markdown using a fixed template — pure string interpolation, no LLM call
 
 ### Output
 ```typescript
@@ -243,13 +243,14 @@ Convert a list of technologies into a prioritised migration plan. Goes beyond `a
 ### Logic (in `RadarService.getMigrationRoadmap`)
 1. Run `auditTechStack` internally to classify each technology
 2. Filter to `migrate` (hold/caution) and `monitor` (assess) items — skip `healthy` and `unknown`
-3. For each filtered item: call `getTechnologyRiskScore` to get composite risk
-4. Sort descending by `riskScore`; break ties by ring severity (`caution` before `hold` before `assess`)
-5. For each `migrate` item: call `findAlternatives` to populate `suggestedAlternatives`
-6. Estimate migration effort heuristic (quadrant-based, adjusted by riskScore):
-   - `high`: quadrant is `platforms` or `tools`, OR riskScore ≥ 7 (infra-level changes are inherently expensive)
-   - `medium`: quadrant is `techniques` or `languages-and-frameworks` AND riskScore 4–6
-   - `low`: quadrant is `languages-and-frameworks` or `techniques` AND riskScore ≤ 3
+3. For each filtered item: call `getTechnologyRiskScore` to get composite risk. Alternatives are taken from `item.alternatives` already embedded in the `AuditItem` by `auditTechStack` (which calls `findAlternatives` internally) — no second lookup needed.
+4. Concurrency: process in batches of 5 to avoid hitting GitHub API rate limits (60 req/hr unauthenticated × 2 calls per technology = exhausted at ~30 technologies without batching).
+5. Sort descending by `riskScore`; nulls sort last (technology found in radar but all external fetches failed); tiebreak by ring severity (`caution` before `hold` before `assess`)
+6. `RoadmapItem.riskScore` is always `number`. Fallback value is `6/10` (conservative "medium-high, assume caution") for the theoretical edge case where a technology passes `auditTechStack` but `getTechnologyRiskScore` can't resolve it. In practice this can't occur — both methods use the same radar lookup path.
+7. Estimate migration effort heuristic (quadrant-based, adjusted by riskScore):
+   - `high`: quadrant is `platforms` or `tools`, OR riskScore ≥ 7
+   - `medium`: riskScore is null OR riskScore 4–6
+   - `low`: riskScore ≤ 3
 
 ### Output
 ```typescript
@@ -264,7 +265,7 @@ Convert a list of technologies into a prioritised migration plan. Goes beyond `a
     name: string
     currentRing: Ring
     quadrant: Quadrant
-    riskScore: number
+    riskScore: number            // 6 fallback if lookup fails (conservative)
     action: 'migrate' | 'monitor'
     effort: 'low' | 'medium' | 'high'
     suggestedAlternatives: RadarEntry[]   // empty for 'monitor' items
@@ -275,9 +276,15 @@ Convert a list of technologies into a prioritised migration plan. Goes beyond `a
 
 ---
 
-## Types to add to `types.ts`
+## Types in `types.ts`
 
 ```typescript
+export interface GitHubHealth {
+  stars: number
+  lastCommitDaysAgo: number
+  openIssues: number
+}
+
 export type TrendDirection = 'rising' | 'falling' | 'stable'
 
 export interface TrendingEntry {
@@ -294,7 +301,7 @@ export interface RiskScore {
   riskScore: number
   breakdown: { radarRisk: number; maintenanceRisk: number | null; securityRisk: number | null }
   currentRing: Ring | 'unknown'
-  githubHealth: import('./externalDataFetcher.js').GitHubHealth | null
+  githubHealth: GitHubHealth | null
   cveCount: number | null
 }
 
@@ -338,15 +345,9 @@ Tests follow the existing pattern: real JSON data, no mocks for `RadarService` l
 
 | Test file | Coverage |
 |-----------|---------|
-| `tests/radarService.test.ts` (extend) | `getTrendingTechnologies`, `getTechnologyRiskScore` (with `NullExternalDataFetcher`), `draftADR`, `getMigrationRoadmap` |
-| `tests/tools.test.ts` (extend) | All four new `createXxxTool()` wrappers via `tool.execute()` |
-| `tests/externalDataFetcher.test.ts` (new) | HTTP fetch logic using `nock` or `msw` to mock network; verify graceful degradation on 4xx/5xx/timeout |
-
-Key test cases:
-- `getTrendingTechnologies`: technology with clear upward trend (e.g. Rust, known from data); empty result for unknown quadrant
-- `getTechnologyRiskScore`: known technology returns valid 0–10 score with all breakdowns when fetcher returns null; score increases when CVE count is non-zero
-- `draftADR`: two-option ADR produces valid Markdown with both options' radar data; unknown technology option gracefully shows "not found in radar"
-- `getMigrationRoadmap`: mixed stack (healthy + migrate + monitor) returns only non-healthy items sorted by risk; `migrate` items have non-empty `suggestedAlternatives`
+| `tests/radarService.test.ts` (extended) | `getTrendingTechnologies`, `getTechnologyRiskScore` (with `NullExternalDataFetcher`), `draftADR`, `getMigrationRoadmap` |
+| `tests/tools.test.ts` (extended) | All four new `createXxxTool()` wrappers via `tool.execute()` |
+| `tests/externalDataFetcher.test.ts` (new) | HTTP fetch logic using `vi.fn()` to mock fetch; verify graceful degradation on 4xx/5xx/timeout |
 
 ---
 

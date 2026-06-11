@@ -138,6 +138,7 @@ export function createGetTechnologyRiskScoreTool(service: RadarService) {
     description:
       'Call this when the user wants to assess the risk of using a specific technology — combining radar ring position, GitHub maintenance health, and known CVE security vulnerabilities into a 0–10 composite score. ' +
       'Also call this before making migration decisions to quantify urgency. ' +
+      'Note: GitHub health data is sourced via name-based search and may not always resolve to the canonical repository. ' +
       'Returns null if the technology is not found in any radar volume.',
     inputSchema: z.object({
       context: z.object({
@@ -168,7 +169,7 @@ export function createDraftADRTool(service: RadarService) {
               description: z.string().optional().describe('Optional TL note about this option'),
             })
           )
-          .min(1),
+          .min(2),
         context: z.string().optional().describe('Problem statement or background context'),
       }),
     }),

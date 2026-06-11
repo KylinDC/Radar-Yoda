@@ -190,7 +190,7 @@ export class RadarService {
       const slope = linearRegressionSlope(scores)
 
       const direction: TrendDirection =
-        slope <= -0.1 ? 'rising' : slope >= 0.1 ? 'falling' : 'stable'
+        slope <= -0.05 ? 'rising' : slope >= 0.05 ? 'falling' : 'stable'
 
       if (directionFilter !== 'all' && direction !== directionFilter) continue
 
@@ -404,13 +404,21 @@ export class RadarService {
     const audit = this.auditTechStack({ technologies: input.technologies })
     const actionItems = audit.items.filter((i) => i.status === 'migrate' || i.status === 'monitor')
 
-    // Compute risk scores in parallel
-    const scored = await Promise.all(
-      actionItems.map(async (item) => {
-        const risk = await this.getTechnologyRiskScore({ name: item.name })
-        return { item, riskScore: risk?.riskScore ?? 6 }
-      })
-    )
+    // Compute risk scores with concurrency limit to avoid GitHub API rate limits.
+    // Fallback 6/10 = conservative "medium-high, assume caution" for the theoretical case
+    // where a technology passes auditTechStack but getTechnologyRiskScore can't find it.
+    const CONCURRENCY = 5
+    const scored: { item: AuditItem; riskScore: number }[] = []
+    for (let i = 0; i < actionItems.length; i += CONCURRENCY) {
+      const batch = actionItems.slice(i, i + CONCURRENCY)
+      const batchResults = await Promise.all(
+        batch.map(async (item) => {
+          const risk = await this.getTechnologyRiskScore({ name: item.name })
+          return { item, riskScore: risk?.riskScore ?? 6 }
+        })
+      )
+      scored.push(...batchResults)
+    }
 
     // Sort by riskScore desc, then by ring severity (caution > hold > assess)
     const ringSeverity: Partial<Record<string, number>> = { caution: 3, hold: 2, assess: 1 }
