@@ -174,3 +174,7 @@ npm run check     # lint + format check
 - Vol.34 (Apr 2026) uses `"caution"` instead of `"hold"` for the avoid ring. Both values are valid and handled equivalently.
 - Technologies can disappear from recent volumes while still having full history — all queries handle this gracefully via `historyMap` fallback.
 - Risk scores from `get_technology_risk_score` and `get_migration_roadmap` degrade gracefully when GitHub or CVE data is unavailable, defaulting to worst-case scores to avoid false confidence.
+
+## Special Thanks
+
+Thanks for [thoughtworks-tech-radar-volumes](https://github.com/setchy/thoughtworks-tech-radar-volumes) to bring us the wonderful data!
