@@ -17,6 +17,7 @@ import {
   createDraftADRTool,
   createGetMigrationRoadmapTool,
 } from './tools.js'
+import { isRateLimited } from './rateLimiter.js'
 
 const MCP_PATH = '/mcp'
 const port = parseInt(process.env.PORT ?? '3000', 10)
@@ -44,6 +45,13 @@ async function main() {
   })
 
   const httpServer = http.createServer(async (req, res) => {
+    const ip = req.socket.remoteAddress ?? 'unknown'
+    if (isRateLimited(ip)) {
+      res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' })
+      res.end(JSON.stringify({ error: 'Too Many Requests' }))
+      return
+    }
+
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
     if (url.pathname === '/health') {
