@@ -99,7 +99,7 @@ Uses `list_by_ring_and_quadrant` with `ring: adopt, quadrant: platforms`. Return
 
 ---
 
-## Setup
+## Self-hosted setup
 
 ```bash
 npm install
@@ -114,11 +114,13 @@ Connect any MCP client via URL:
 {
   "mcpServers": {
     "tech-radar-advisor": {
+      "type": "http",
       "url": "http://localhost:3000/mcp"
     }
   }
 }
 ```
+
 
 ### Endpoints
 
