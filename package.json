@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "gen:volumes": "tsx scripts/gen-volumes.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/src/index.js",
     "test": "vitest run",
+    "verify": "tsx scripts/verify.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "demo": "npx tsx demo.ts",
     "format": "biome format --write .",
     "lint": "biome lint .",
@@ -16,6 +20,7 @@
   "dependencies": {
     "@mastra/core": "^1.41.0",
     "@mastra/mcp": "^1.9.1",
+    "fetch-to-node": "^2.1.0",
     "fuse.js": "^7.4.2",
     "zod": "^4.4.3"
   },
@@ -24,6 +29,7 @@
     "@types/node": "^25.9.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "wrangler": "^4.151.0"
   }
 }

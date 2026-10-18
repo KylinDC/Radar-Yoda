@@ -18,6 +18,9 @@ npm-debug.log*
 .env.*.local
 tsconfig.tsbuildinfo
 
+# Wrangler build state — regenerated on every `wrangler dev` / `wrangler deploy`
+.wrangler/
+
 # Terraform / GCP deployment
 infra/terraform.tfvars
 infra/.terraform/

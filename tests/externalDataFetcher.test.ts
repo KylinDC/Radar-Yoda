@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HttpExternalDataFetcher } from '../src/externalDataFetcher.js'
 
 afterEach(() => {
@@ -52,6 +52,29 @@ describe('HttpExternalDataFetcher.fetchGitHubHealth', () => {
     const fetcher = new HttpExternalDataFetcher(mockFetch as unknown as typeof globalThis.fetch)
     const result = await fetcher.fetchGitHubHealth('kubernetes')
     expect(result).toBeNull()
+  })
+})
+
+describe('HttpExternalDataFetcher GitHub token', () => {
+  function requestInit(mockFetch: unknown): {
+    headers: Record<string, string>
+  } {
+    return (mockFetch as ReturnType<typeof vi.fn>).mock.calls[0][1]
+  }
+
+  it('omits the Authorization header when no token is configured', async () => {
+    const mockFetch = makeFetch(200, { items: [] })
+    await new HttpExternalDataFetcher(mockFetch).fetchGitHubHealth('kubernetes')
+    expect(requestInit(mockFetch).headers).not.toHaveProperty('Authorization')
+  })
+
+  it('sends a Bearer token when one is configured', async () => {
+    const mockFetch = makeFetch(200, { items: [] })
+    const fetcher = new HttpExternalDataFetcher(mockFetch, {
+      githubToken: 'ghp_secret',
+    })
+    await fetcher.fetchGitHubHealth('kubernetes')
+    expect(requestInit(mockFetch).headers.Authorization).toBe('Bearer ghp_secret')
   })
 })
 

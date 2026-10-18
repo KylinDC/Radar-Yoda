@@ -1,24 +1,18 @@
-import { readFile, readdir } from 'fs/promises'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import Fuse from 'fuse.js'
-import type { RadarEntry, RadarIndex, Ring, Quadrant } from './types.js'
-
-// Resolve DATA_DIR relative to the project root.
-// When running from src/ (vitest): go up 1 level.
-// When running from dist/src/ (production): go up 2 levels.
-// We detect this by checking whether the computed path exists.
-const _fileDir = dirname(fileURLToPath(import.meta.url))
-const _candidate1 = join(_fileDir, '..', 'tech-radar-json-data')
-const _candidate2 = join(_fileDir, '..', '..', 'tech-radar-json-data')
-import { existsSync } from 'fs'
-const DATA_DIR = existsSync(_candidate1) ? _candidate1 : _candidate2
+import { VOLUMES } from './generated/volumes.js'
+import type { Quadrant, RadarEntry, RadarIndex, RawEntry, Ring } from './types.js'
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim()
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&[a-z]+;/g, ' ')
+    .trim()
 }
 
-function parseVolumeAndYear(filename: string): { volume: number; year: number } {
+export function parseVolumeAndYear(filename: string): {
+  volume: number
+  year: number
+} {
   const volMatch = filename.match(/Volume\s+(\d+)/i)
   const yearMatch = filename.match(/\(.*?(\d{4})\)/)
   if (!volMatch) throw new Error(`Cannot parse volume from filename: ${filename}`)
@@ -28,50 +22,30 @@ function parseVolumeAndYear(filename: string): { volume: number; year: number } 
   }
 }
 
-type RawEntry = {
-  name: string
-  ring: string
-  quadrant: string
-  isNew: string
-  status: string
-  description: string
-  relatedBlips: string[]
+export function normalizeEntries(raw: RawEntry[], volume: number, year: number): RadarEntry[] {
+  return raw.map((r) => ({
+    name: r.name,
+    ring: r.ring.toLowerCase() as Ring,
+    quadrant: r.quadrant.toLowerCase() as Quadrant,
+    isNew: r.isNew === 'TRUE',
+    status: r.status as RadarEntry['status'],
+    description: stripHtml(r.description ?? ''),
+    relatedBlips: r.relatedBlips ?? [],
+    volume,
+    year,
+  }))
 }
 
-export async function buildRadarIndex(): Promise<RadarIndex> {
-  const files = (await readdir(DATA_DIR))
-    .filter((f) => f.endsWith('.json'))
-    .sort()
-
-  const allEntries: RadarEntry[] = []
-
-  for (const filename of files) {
-    const { volume, year } = parseVolumeAndYear(filename)
-    const raw: RawEntry[] = JSON.parse(
-      await readFile(join(DATA_DIR, filename), 'utf-8')
-    )
-
-    const entries: RadarEntry[] = raw.map((r) => ({
-      name: r.name,
-      ring: r.ring.toLowerCase() as Ring,
-      quadrant: r.quadrant.toLowerCase() as Quadrant,
-      isNew: r.isNew === 'TRUE',
-      status: r.status as RadarEntry['status'],
-      description: stripHtml(r.description ?? ''),
-      relatedBlips: r.relatedBlips ?? [],
-      volume,
-      year,
-    }))
-
-    allEntries.push(...entries)
-  }
-
+/** Builds the Maps and Fuse index from an already-normalised set of entries. */
+function buildIndex(allEntries: RadarEntry[]): RadarIndex {
   // Dynamically detect the latest volume
   const maxVolume = allEntries.reduce((max, e) => Math.max(max, e.volume), 0)
   const latestVolumeEntries = allEntries.filter((e) => e.volume === maxVolume)
 
   if (latestVolumeEntries.length === 0) {
-    throw new Error('Failed to find latest radar volume data. Check tech-radar-json-data/ directory.')
+    throw new Error(
+      'Failed to find latest radar volume data. Check tech-radar-json-data/ directory.',
+    )
   }
 
   // historyMap — all volumes, sorted by volume ascending
@@ -83,7 +57,10 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
     historyMap.set(key, existing)
   }
   for (const [key, entries] of historyMap) {
-    historyMap.set(key, entries.sort((a, b) => a.volume - b.volume))
+    historyMap.set(
+      key,
+      entries.sort((a, b) => a.volume - b.volume),
+    )
   }
 
   // Fuse.js index — search over latest entry per technology (covers all volumes)
@@ -104,4 +81,34 @@ export async function buildRadarIndex(): Promise<RadarIndex> {
   }
 
   return { fuseIndex, historyMap, ringQuadrantMap }
+}
+
+/**
+ * Builds the radar index from an explicit list of volumes. Pure and
+ * filesystem-free, so it runs unchanged in Node and in a Cloudflare Worker.
+ */
+export function buildRadarIndexFromVolumes(
+  volumes: Array<{ filename: string; entries: RawEntry[] }>,
+): RadarIndex {
+  const allEntries: RadarEntry[] = []
+
+  for (const { filename, entries: raw } of volumes) {
+    const { volume, year } = parseVolumeAndYear(filename)
+    allEntries.push(...normalizeEntries(raw, volume, year))
+  }
+
+  return buildIndex(allEntries)
+}
+
+/**
+ * Builds the index from the bundled volumes in `src/generated/volumes.ts`.
+ *
+ * The volumes are statically imported rather than read with fs, because
+ * Workers have no filesystem. Run `npm run gen:volumes` after adding a volume.
+ *
+ * The work is ~30ms, so call this at module scope (startup budget is 1s) —
+ * never inside a request handler, where the free plan's 10ms CPU limit applies.
+ */
+export async function buildRadarIndex(): Promise<RadarIndex> {
+  return buildRadarIndexFromVolumes(VOLUMES)
 }

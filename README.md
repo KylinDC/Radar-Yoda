@@ -28,16 +28,16 @@ Convert a tech stack into a prioritised migration plan. Technologies are ranked 
 
 | Tool | What it does |
 |------|-------------|
-| `search_technology` | Fuzzy-search by name in the latest radar. Filter by ring or quadrant. |
-| `get_technology_history` | Full ring-change history across all 34 volumes (2010–2026). |
-| `find_alternatives` | Adopt/Trial technologies in the same quadrant as a Hold/Caution tech. |
-| `list_by_ring_and_quadrant` | All technologies in Vol.34 matching a ring and/or quadrant. |
-| `compare_technologies` | Side-by-side current status + full history for two or more technologies. |
-| `audit_tech_stack` | Health check a list of technologies: healthy / monitor / migrate / unknown. |
-| `get_trending_technologies` | Technologies rising or falling across radar volumes, with trajectory data. |
-| `get_technology_risk_score` | Composite 0–10 risk score: radar ring + GitHub health + CVE count. |
-| `draft_adr` | Generate a Markdown ADR draft with radar evidence pre-filled per option. |
-| `get_migration_roadmap` | Prioritised migration plan from a tech stack list, ranked by risk score. |
+| `searchTechnology` | Fuzzy-search by name in the latest radar. Filter by ring or quadrant. |
+| `getTechnologyHistory` | Full ring-change history across all 34 volumes (2010–2026). |
+| `findAlternatives` | Adopt/Trial technologies in the same quadrant as a Hold/Caution tech. |
+| `listByRingAndQuadrant` | All technologies in Vol.34 matching a ring and/or quadrant. |
+| `compareTechnologies` | Side-by-side current status + full history for two or more technologies. |
+| `auditTechStack` | Health check a list of technologies: healthy / monitor / migrate / unknown. |
+| `getTrendingTechnologies` | Technologies rising or falling across radar volumes, with trajectory data. |
+| `getTechnologyRiskScore` | Composite 0–10 risk score: radar ring + GitHub health + CVE count. |
+| `draftADR` | Generate a Markdown ADR draft with radar evidence pre-filled per option. |
+| `getMigrationRoadmap` | Prioritised migration plan from a tech stack list, ranked by risk score. |
 
 ---
 
@@ -46,81 +46,87 @@ Convert a tech stack into a prioritised migration plan. Technologies are ranked 
 ### "Is this technology safe to adopt?"
 > *"What's the current radar status of Temporal, and how has it moved over time?"*
 
-Uses `search_technology` + `get_technology_history`. Returns the current ring, quadrant, and a full trajectory showing whether it's accelerating toward Adopt or stalling.
+Uses `searchTechnology` + `getTechnologyHistory`. Returns the current ring, quadrant, and a full trajectory showing whether it's accelerating toward Adopt or stalling.
 
 ---
 
 ### "We're on Jenkins — what should we move to?"
 > *"Find alternatives to Jenkins and compare GitHub Actions vs Tekton."*
 
-Uses `find_alternatives` + `compare_technologies`. Returns Adopt/Trial CI tools in the same quadrant with side-by-side radar history.
+Uses `findAlternatives` + `compareTechnologies`. Returns Adopt/Trial CI tools in the same quadrant with side-by-side radar history.
 
 ---
 
 ### "What's hot right now in the tools space?"
 > *"Show me the top rising technologies in the tools quadrant."*
 
-Uses `get_trending_technologies` with `quadrant: tools, direction: rising`. Returns technologies with the steepest positive momentum across recent radar volumes.
+Uses `getTrendingTechnologies` with `quadrant: tools, direction: rising`. Returns technologies with the steepest positive momentum across recent radar volumes.
 
 ---
 
 ### "How risky is our current stack?"
 > *"Audit our stack: Kubernetes, Kafka, Jenkins, AngularJS, Spring Boot, REST APIs."*
 
-Uses `audit_tech_stack`. Returns a health report classifying each technology and listing alternatives for anything in Hold/Caution.
+Uses `auditTechStack`. Returns a health report classifying each technology and listing alternatives for anything in Hold/Caution.
 
 ---
 
 ### "Prioritise our tech debt"
 > *"Give me a migration roadmap for: Jenkins, AngularJS, REST APIs, Kafka, jQuery."*
 
-Uses `get_migration_roadmap`. Returns a ranked list with risk scores (radar + GitHub + CVE), recommended alternatives, effort estimates (low/medium/high), and a rationale for each item.
+Uses `getMigrationRoadmap`. Returns a ranked list with risk scores (radar + GitHub + CVE), recommended alternatives, effort estimates (low/medium/high), and a rationale for each item.
 
 ---
 
 ### "Help me write a tech decision document"
 > *"Draft an ADR for choosing a container orchestration platform. Options are Kubernetes, Nomad, and Docker Swarm."*
 
-Uses `draft_adr`. Returns a complete Markdown ADR with each option's current radar ring, history summary, and latest description pre-filled. You fill in Decision and Consequences.
+Uses `draftADR`. Returns a complete Markdown ADR with each option's current radar ring, history summary, and latest description pre-filled. You fill in Decision and Consequences.
 
 ---
 
 ### "What are the riskiest technologies we could be using?"
 > *"What's the risk score for log4j?"*
 
-Uses `get_technology_risk_score`. Returns a breakdown of radar risk, maintenance health (GitHub stars, last commit), and known CVEs — all combined into a single 0–10 score.
+Uses `getTechnologyRiskScore`. Returns a breakdown of radar risk, maintenance health (GitHub stars, last commit), and known CVEs — all combined into a single 0–10 score.
 
 ---
 
 ### "Show me what's in Adopt right now"
 > *"List all platforms in the Adopt ring."*
 
-Uses `list_by_ring_and_quadrant` with `ring: adopt, quadrant: platforms`. Returns all Vol.34 platform technologies Thoughtworks recommends adopting, sorted by name.
+Uses `listByRingAndQuadrant` with `ring: adopt, quadrant: platforms`. Returns all Vol.34 platform technologies Thoughtworks recommends adopting, sorted by name.
 
 ---
 
-## Self-hosted setup
+## Deploy
+
+The server runs as a Cloudflare Worker — no container, no process to keep alive.
 
 ```bash
 npm install
-npm run build
-node dist/src/index.js        # default port 3000
-PORT=8080 node dist/src/index.js  # custom port
+npx wrangler login   # once
+npm run deploy       # → https://radar-yoda-server.<your-subdomain>.workers.dev
 ```
 
-Connect any MCP client via URL:
+Store a GitHub token as a Worker secret to raise the GitHub API rate limit from 60 to 5,000 requests/hour. Secrets are set out-of-band and never land in the repo:
 
-```json
-{
-  "mcpServers": {
-    "tech-radar-advisor": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
+```bash
+npx wrangler secret put GITHUB_TOKEN
 ```
 
+### Continuous deployment
+
+`.github/workflows/deploy.yml` runs on every push to `main`. It regenerates the volumes manifest (failing if the committed copy is stale), type-checks, runs the tests, runs `biome check`, deploys, and finally smoke-tests the live Worker. Pull requests run the verification steps only.
+
+Add these under **Settings → Secrets and variables → Actions**:
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → *Edit Cloudflare Workers* template |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → Account ID (right sidebar) |
+
+The deploy job targets the `production` GitHub environment, so you can require manual approval there if you want a human in the loop.
 
 ### Endpoints
 
@@ -129,28 +135,38 @@ Connect any MCP client via URL:
 | `GET /health` | Health check — returns `{"status":"ok"}` |
 | `POST /mcp` | MCP Streamable HTTP transport |
 
-### Development (no build step)
+Every request is rate-limited to 600 per minute per IP. Over that the Worker returns `429` with `Retry-After: 60`.
 
-```bash
-npx tsx src/index.ts
-```
-
-Optional — set `GITHUB_TOKEN` in the server environment to increase GitHub API rate limits (60 → 5,000 requests/hour):
+### Connect an MCP client
 
 ```json
 {
   "mcpServers": {
     "tech-radar-advisor": {
-      "command": "node",
-      "args": ["dist/src/index.js"],
-      "cwd": "/path/to/this/repo",
-      "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here"
-      }
+      "type": "http",
+      "url": "https://radar-yoda-server.<your-subdomain>.workers.dev/mcp"
     }
   }
 }
 ```
+
+### Local development
+
+```bash
+npm run dev     # wrangler dev on http://127.0.0.1:8787
+npm run smoke   # assert the running server answers MCP correctly
+npm run verify  # same, but prints the responses instead of asserting
+```
+
+`npm run smoke` is the same script CI runs after deploying, so it doubles as a local end-to-end check. Both accept a URL argument to point at a deployment:
+
+```bash
+npm run smoke -- https://radar-yoda-server.<your-subdomain>.workers.dev
+```
+
+### Cost note
+
+`searchTechnology` costs 6–9 ms of CPU per call, because it runs a Fuse.js query over 1,936 technologies. The Workers **Free** plan allows 10 ms of CPU per request, which leaves little headroom; the **Paid** plan's 30 s limit is the safer choice once the server sees real traffic. Every other tool stays under 1 ms. The index itself is built once per isolate at module scope (~30 ms, against a 1 s startup budget) and reused across requests.
 
 ## Demo
 
@@ -163,17 +179,20 @@ Runs the Jenkins migration scenario: search → find alternatives → trace GitH
 ## Development
 
 ```bash
-npm test          # run all tests (95 tests, loads real JSON data — no mocks)
+npm test          # run all tests (110 tests, loads real JSON data — no mocks)
 npm run typecheck # type-check only
-npm run check     # lint + format check
+npm run check     # lint + format check (biome)
+npm run format    # auto-format
+npm run gen:volumes # regenerate src/generated/volumes.ts
 ```
 
 ## Data notes
 
 - `tech-radar-json-data/` — 34 JSON files, one per volume. Do not rename or restructure them; filenames are parsed for volume number and year.
+- Adding a volume is a two-step change: drop the JSON in, then run `npm run gen:volumes` and commit the regenerated `src/generated/volumes.ts`. Workers have no filesystem, so the volumes are compiled into the bundle as static imports rather than read at runtime. CI fails if the two fall out of sync.
 - Vol.34 (Apr 2026) uses `"caution"` instead of `"hold"` for the avoid ring. Both values are valid and handled equivalently.
 - Technologies can disappear from recent volumes while still having full history — all queries handle this gracefully via `historyMap` fallback.
-- Risk scores from `get_technology_risk_score` and `get_migration_roadmap` degrade gracefully when GitHub or CVE data is unavailable, defaulting to worst-case scores to avoid false confidence.
+- Risk scores from `getTechnologyRiskScore` and `getMigrationRoadmap` degrade gracefully when GitHub or CVE data is unavailable, defaulting to worst-case scores to avoid false confidence.
 
 ## Special Thanks
 

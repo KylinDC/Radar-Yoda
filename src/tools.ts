@@ -1,15 +1,9 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import type { RadarService } from './radarService.js'
-import type { TrendDirection } from './types.js'
 
 const RingSchema = z.enum(['adopt', 'trial', 'assess', 'hold', 'caution'])
-const QuadrantSchema = z.enum([
-  'techniques',
-  'tools',
-  'platforms',
-  'languages-and-frameworks',
-])
+const QuadrantSchema = z.enum(['techniques', 'tools', 'platforms', 'languages-and-frameworks'])
 
 export function createSearchTechnologyTool(service: RadarService) {
   const tool = createTool({
@@ -56,7 +50,7 @@ export function createFindAlternativesTool(service: RadarService) {
     description:
       'Call this when the user asks "what should I use instead of X", wants to migrate away from a Hold or Caution technology, or needs replacement recommendations for a single technology. ' +
       'Returns Adopt/Trial alternatives in the same quadrant (Vol.34). ' +
-      'For auditing an entire tech stack at once, use audit_tech_stack instead.',
+      'For auditing an entire tech stack at once, use auditTechStack instead.',
     inputSchema: z.object({
       context: z.object({
         name: z.string().describe('Technology name to find alternatives for'),
@@ -98,9 +92,7 @@ export function createAuditTechStackTool(service: RadarService) {
       'and which are unknown. Use this for architecture reviews or migration planning.',
     inputSchema: z.object({
       context: z.object({
-        technologies: z
-          .array(z.string())
-          .describe('List of technology names to audit'),
+        technologies: z.array(z.string()).describe('List of technology names to audit'),
       }),
     }),
     execute: async ({ context }) => {
@@ -116,13 +108,10 @@ export function createCompareTechnologiesTool(service: RadarService) {
     description:
       'Call this when the user wants to compare two or more specific technologies head-to-head — for example "React vs Svelte" or "Kafka vs Pulsar". ' +
       'Returns their current Vol.34 ring status and full history side by side. ' +
-      'For evaluating an existing tech stack rather than comparing candidates, use audit_tech_stack instead.',
+      'For evaluating an existing tech stack rather than comparing candidates, use auditTechStack instead.',
     inputSchema: z.object({
       context: z.object({
-        names: z
-          .array(z.string())
-          .min(2)
-          .describe('Two or more technology names to compare'),
+        names: z.array(z.string()).min(2).describe('Two or more technology names to compare'),
       }),
     }),
     execute: async ({ context }) => {
@@ -167,7 +156,7 @@ export function createDraftADRTool(service: RadarService) {
             z.object({
               name: z.string().describe('Technology name'),
               description: z.string().optional().describe('Optional TL note about this option'),
-            })
+            }),
           )
           .min(2),
         context: z.string().optional().describe('Problem statement or background context'),
@@ -187,7 +176,7 @@ export function createGetMigrationRoadmapTool(service: RadarService) {
       'Call this when the user wants a prioritised migration plan for their tech stack, asks "what should we migrate first", or needs an ordered list of tech debt to address. ' +
       'Combines radar ring status and composite risk scores (GitHub health + CVE data) to rank technologies by urgency. ' +
       'Returns only technologies that need action (hold/caution → migrate; assess → monitor); skips healthy ones. ' +
-      'For auditing without prioritisation, use audit_tech_stack instead.',
+      'For auditing without prioritisation, use auditTechStack instead.',
     inputSchema: z.object({
       context: z.object({
         technologies: z

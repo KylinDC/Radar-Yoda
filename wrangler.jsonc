@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "radar-yoda-server",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-15",
+  // Required by fetch-to-node (it uses node:stream / node:buffer) and by
+  // @mastra/core, which imports fs/promises, os and path at module scope.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // @mastra/mcp runs `createRequire(import.meta.url)` at module scope to probe
+  // for the optional `dd-trace` Datadog tracer. workerd leaves import.meta.url
+  // undefined, so that call throws and the whole Worker fails to start.
+  // Substituting any valid file URL is enough: the probe itself never runs
+  // here, and mastra/core already does the same `|| "file://"` fallback.
+  "define": {
+    "import.meta.url": "\"file:///worker.js\""
+  },
+  // Replaces the in-memory rate limiter from the Node server. Counters are
+  // per Cloudflare location, not global. `period` may only be 10 or 60.
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "6001",
+      "simple": {
+        "limit": 600,
+        "period": 60
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Never run two deploys at once, and don't cancel one that is already shipping.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Regenerate volumes manifest
+        run: npm run gen:volumes
+
+      # Catches a volume JSON being added without the generated manifest being
+      # committed, which would silently ship an index missing that volume.
+      # `git status --porcelain` rather than `git diff`: it also catches the
+      # manifest being missing from the repository entirely, which plain
+      # `git diff --quiet` reports as clean.
+      - name: Check the volumes manifest is up to date
+        run: |
+          if [ -n "$(git status --porcelain -- src/generated/volumes.ts)" ]; then
+            echo "::error::src/generated/volumes.ts is stale or untracked. Run 'npm run gen:volumes' and commit the result."
+            git --no-pager diff -- src/generated/volumes.ts
+            exit 1
+          fi
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run check
+
+  deploy:
+    name: Deploy
+    needs: verify
+    # Deploy from main only, and never from a pull request.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Deploy
+        id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The unit tests and `wrangler deploy --dry-run` never execute the bundle,
+      # so this is the only step that proves the Worker actually boots in the
+      # Workers runtime and answers MCP requests.
+      - name: Smoke test the deployment
+        run: npm run smoke -- "${{ steps.deploy.outputs.deployment-url }}"
+
+      # Runs even when the smoke test fails, so the URL is always recorded.
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Deployed :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Worker URL: ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "MCP endpoint: ${{ steps.deploy.outputs.deployment-url }}/mcp" >> "$GITHUB_STEP_SUMMARY"

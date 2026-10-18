@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import type { Ring, Quadrant, RadarEntry, RadarIndex } from '../src/types.js'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { buildRadarIndex } from '../src/dataLoader.js'
 import { RadarService } from '../src/radarService.js'
+import type { Quadrant, Ring } from '../src/types.js'
 
 describe('types', () => {
   it('Ring values are the four rings', () => {
@@ -15,12 +15,7 @@ describe('types', () => {
   })
 
   it('Quadrant values are the four quadrants', () => {
-    const quadrants: Quadrant[] = [
-      'techniques',
-      'tools',
-      'platforms',
-      'languages-and-frameworks',
-    ]
+    const quadrants: Quadrant[] = ['techniques', 'tools', 'platforms', 'languages-and-frameworks']
     expect(quadrants).toHaveLength(4)
     expect(quadrants).toContain('techniques')
     expect(quadrants).toContain('tools')
@@ -97,12 +92,16 @@ describe('RadarService.searchTechnology', () => {
       query: 'Docker',
       quadrant: 'platforms',
     })
-    result.results.forEach((r) => expect(r.quadrant).toBe('platforms'))
+    result.results.forEach((r) => {
+      expect(r.quadrant).toBe('platforms')
+    })
   })
 
   it('filters by ring', () => {
     const result = service.searchTechnology({ query: 'Docker', ring: 'adopt' })
-    result.results.forEach((r) => expect(r.ring).toBe('adopt'))
+    result.results.forEach((r) => {
+      expect(r.ring).toBe('adopt')
+    })
   })
 
   it('returns at most 5 results', () => {
@@ -127,7 +126,9 @@ describe('RadarService.listByRingAndQuadrant', () => {
   it('lists all adopt entries when no quadrant given', () => {
     const results = service.listByRingAndQuadrant({ ring: 'adopt' })
     expect(results.length).toBeGreaterThan(0)
-    results.forEach((r) => expect(r.ring).toBe('adopt'))
+    results.forEach((r) => {
+      expect(r.ring).toBe('adopt')
+    })
   })
 
   it('lists adopt:platforms entries', () => {
@@ -290,7 +291,9 @@ describe('RadarService.auditTechStack', () => {
     expect(item.status).toBe('migrate')
     expect(item.alternatives).toBeDefined()
     expect(item.alternatives!.length).toBeGreaterThan(0)
-    item.alternatives!.forEach((a) => expect(['adopt', 'trial']).toContain(a.ring))
+    item.alternatives!.forEach((a) => {
+      expect(['adopt', 'trial']).toContain(a.ring)
+    })
   })
 
   it('marks unknown technology as unknown status and adds to notFound', () => {
@@ -314,9 +317,8 @@ describe('RadarService.auditTechStack', () => {
   it('summary healthy count equals adopt + trial items', () => {
     const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
     const trialTechs = service.listByRingAndQuadrant({ ring: 'trial' })
-    const technologies = trialTechs.length > 0
-      ? [adoptTech.name, trialTechs[0].name]
-      : [adoptTech.name]
+    const technologies =
+      trialTechs.length > 0 ? [adoptTech.name, trialTechs[0].name] : [adoptTech.name]
     const result = service.auditTechStack({ technologies })
     expect(result.summary.healthy).toBe(technologies.length)
   })
@@ -417,7 +419,9 @@ describe('RadarService.getTechnologyRiskScore', () => {
   it('riskScore increases when CVE count is high', async () => {
     const { NullExternalDataFetcher } = await import('../src/externalDataFetcher.js')
     class HighCVEFetcher extends NullExternalDataFetcher {
-      override async fetchCVECount(_name: string) { return 25 } // > 20 → securityRisk=3
+      override async fetchCVECount(_name: string) {
+        return 25
+      } // > 20 → securityRisk=3
     }
     const index = await buildRadarIndex()
     const svc = new RadarService(index, new HighCVEFetcher())

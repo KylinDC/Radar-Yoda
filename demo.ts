@@ -13,9 +13,9 @@ async function main() {
   if (!searchResult.found) {
     console.log('Jenkins not found in radar.')
   } else {
-    searchResult.results.forEach((e) =>
+    searchResult.results.forEach((e) => {
       console.log(`  ${e.name} | ring: ${e.ring} | quadrant: ${e.quadrant}`)
-    )
+    })
   }
   console.log()
 
@@ -27,14 +27,16 @@ async function main() {
     const history = service.getTechnologyHistory({ name: 'Jenkins' })
     if (history) {
       const latest = history.history[history.history.length - 1]
-      console.log(`  Last seen: Vol.${latest.volume} (${latest.year}) | ring: ${latest.ring} | quadrant: unknown`)
+      console.log(
+        `  Last seen: Vol.${latest.volume} (${latest.year}) | ring: ${latest.ring} | quadrant: unknown`,
+      )
     }
   } else {
     if (alts.warning) console.log(`  Warning: ${alts.warning}`)
     console.log('  Alternatives:')
-    alts.alternatives.forEach((e) =>
+    alts.alternatives.forEach((e) => {
       console.log(`    ${e.name} | ring: ${e.ring}`)
-    )
+    })
   }
   console.log()
 
@@ -44,11 +46,11 @@ async function main() {
   if (!history) {
     console.log('GitHub Actions not found in history.')
   } else {
-    history.history.forEach((h) =>
+    history.history.forEach((h) => {
       console.log(
-        `  Vol.${String(h.volume).padStart(2, '0')} (${h.year}) → ${h.ring} [${h.status}]`
+        `  Vol.${String(h.volume).padStart(2, '0')} (${h.year}) → ${h.ring} [${h.status}]`,
       )
-    )
+    })
   }
   console.log()
 
@@ -68,9 +70,9 @@ async function main() {
     console.log('\n  History comparison:')
     comparison.histories.forEach((h) => {
       console.log(`\n  ${h.name}:`)
-      h.history.forEach((v) =>
+      h.history.forEach((v) => {
         console.log(`    Vol.${String(v.volume).padStart(2, '0')} (${v.year}) → ${v.ring}`)
-      )
+      })
     })
   }
 }

@@ -1,10 +1,6 @@
 export type Ring = 'adopt' | 'trial' | 'assess' | 'hold' | 'caution'
 
-export type Quadrant =
-  | 'techniques'
-  | 'tools'
-  | 'platforms'
-  | 'languages-and-frameworks'
+export type Quadrant = 'techniques' | 'tools' | 'platforms' | 'languages-and-frameworks'
 
 export interface RadarEntry {
   name: string
@@ -16,6 +12,22 @@ export interface RadarEntry {
   relatedBlips: string[]
   volume: number
   year: number
+}
+
+/**
+ * The shape of an entry as it appears in the raw volume JSON files — rings and
+ * quadrants are capitalised, `isNew` is the string "TRUE"/"FALSE", and
+ * `description` still contains HTML. Normalised into a `RadarEntry` by
+ * `normalizeEntries`.
+ */
+export interface RawEntry {
+  name: string
+  ring: string
+  quadrant: string
+  isNew: string
+  status: string
+  description: string
+  relatedBlips: string[]
 }
 
 export type AuditItemStatus = 'healthy' | 'monitor' | 'migrate' | 'unknown'
@@ -94,7 +106,7 @@ export interface RoadmapItem {
   priority: number
   name: string
   currentRing: Ring
-  quadrant: Quadrant
+  quadrant: Quadrant | 'unknown'
   riskScore: number
   action: 'migrate' | 'monitor'
   effort: 'low' | 'medium' | 'high'

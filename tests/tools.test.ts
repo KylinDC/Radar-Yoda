@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { buildRadarIndex } from '../src/dataLoader.js'
 import { RadarService } from '../src/radarService.js'
 import {
-  createSearchTechnologyTool,
-  createGetTechnologyHistoryTool,
-  createFindAlternativesTool,
-  createListByRingAndQuadrantTool,
-  createCompareTechnologiesTool,
   createAuditTechStackTool,
-  createGetTrendingTechnologiesTool,
-  createGetTechnologyRiskScoreTool,
+  createCompareTechnologiesTool,
   createDraftADRTool,
+  createFindAlternativesTool,
   createGetMigrationRoadmapTool,
+  createGetTechnologyHistoryTool,
+  createGetTechnologyRiskScoreTool,
+  createGetTrendingTechnologiesTool,
+  createListByRingAndQuadrantTool,
+  createSearchTechnologyTool,
 } from '../src/tools.js'
 
 let service: RadarService
@@ -22,7 +22,6 @@ beforeAll(async () => {
 })
 
 describe('MCP Tools Integration', () => {
-
   describe('searchTechnology tool', () => {
     it('happy path — finds Context engineering (in Vol.34)', async () => {
       const tool = createSearchTechnologyTool(service)
@@ -92,9 +91,13 @@ describe('MCP Tools Integration', () => {
     it('happy path — audits a mixed list and returns summary + items', async () => {
       const adoptTech = service.listByRingAndQuadrant({ ring: 'adopt' })[0]
       const tool = createAuditTechStackTool(service)
-      const result = await tool.execute({
+      const result = (await tool.execute({
         context: { technologies: [adoptTech.name, 'xyzzy123notreal'] },
-      }) as { summary: { total: number; healthy: number; unknown: number }; items: { status: string }[]; notFound: string[] }
+      })) as {
+        summary: { total: number; healthy: number; unknown: number }
+        items: { status: string }[]
+        notFound: string[]
+      }
       expect(result.summary.total).toBe(2)
       expect(result.summary.healthy).toBe(1)
       expect(result.summary.unknown).toBe(1)
@@ -105,17 +108,18 @@ describe('MCP Tools Integration', () => {
       const cautionTechs = service.listByRingAndQuadrant({ ring: 'caution' })
       if (cautionTechs.length === 0) return
       const tool = createAuditTechStackTool(service)
-      const result = await tool.execute({
+      const result = (await tool.execute({
         context: { technologies: [cautionTechs[0].name] },
-      }) as { items: { status: string; alternatives?: unknown[] }[] }
+      })) as { items: { status: string; alternatives?: unknown[] }[] }
       expect(result.items[0].status).toBe('migrate')
       expect(result.items[0].alternatives?.length).toBeGreaterThan(0)
     })
 
     it('empty path — returns empty items for empty list', async () => {
       const tool = createAuditTechStackTool(service)
-      const result = await tool.execute({ context: { technologies: [] } }) as {
-        summary: { total: number }; items: unknown[]
+      const result = (await tool.execute({ context: { technologies: [] } })) as {
+        summary: { total: number }
+        items: unknown[]
       }
       expect(result.items).toHaveLength(0)
       expect(result.summary.total).toBe(0)
@@ -137,9 +141,7 @@ describe('MCP Tools Integration', () => {
       const result = await tool.execute({
         context: { names: ['DORA metrics', 'xyzzy123notreal'] },
       })
-      expect((result as { notFound?: string[] }).notFound).toContain(
-        'xyzzy123notreal'
-      )
+      expect((result as { notFound?: string[] }).notFound).toContain('xyzzy123notreal')
     })
 
     it('accepts more than two names', async () => {
@@ -164,7 +166,9 @@ describe('getTrendingTechnologies tool', () => {
     const tool = createGetTrendingTechnologiesTool(service)
     const result = await tool.execute({ context: { direction: 'rising', limit: 5 } })
     const trending = (result as { trending: Array<{ direction: string }> }).trending
-    trending.forEach((e) => expect(e.direction).toBe('rising'))
+    trending.forEach((e) => {
+      expect(e.direction).toBe('rising')
+    })
   })
 })
 

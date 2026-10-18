@@ -1,6 +1,20 @@
-import type { RadarEntry, RadarIndex, Ring, Quadrant, AuditItem, AuditResult, TrendDirection, TrendingEntry, RiskScore, GitHubHealth, ADRDraft, ADROption, MigrationRoadmap, RoadmapItem } from './types.js'
-import { NullExternalDataFetcher } from './externalDataFetcher.js'
 import type { ExternalDataFetcher } from './externalDataFetcher.js'
+import { NullExternalDataFetcher } from './externalDataFetcher.js'
+import type {
+  ADRDraft,
+  ADROption,
+  AuditItem,
+  AuditResult,
+  MigrationRoadmap,
+  Quadrant,
+  RadarEntry,
+  RadarIndex,
+  Ring,
+  RiskScore,
+  RoadmapItem,
+  TrendDirection,
+  TrendingEntry,
+} from './types.js'
 
 function linearRegressionSlope(scores: number[]): number {
   const n = scores.length
@@ -20,7 +34,7 @@ type ListInput = { ring?: Ring; quadrant?: Quadrant }
 export class RadarService {
   constructor(
     private readonly index: RadarIndex,
-    private readonly fetcher: ExternalDataFetcher = new NullExternalDataFetcher()
+    private readonly fetcher: ExternalDataFetcher = new NullExternalDataFetcher(),
   ) {}
 
   searchTechnology(input: SearchInput): SearchResult {
@@ -78,9 +92,7 @@ export class RadarService {
     // Look up in Vol.34 via ringQuadrantMap
     let inputEntry: RadarEntry | undefined
     for (const entries of this.index.ringQuadrantMap.values()) {
-      inputEntry = entries.find(
-        (e) => e.name.toLowerCase() === input.name.toLowerCase()
-      )
+      inputEntry = entries.find((e) => e.name.toLowerCase() === input.name.toLowerCase())
       if (inputEntry) break
     }
     if (!inputEntry) {
@@ -90,22 +102,22 @@ export class RadarService {
       inputEntry = history[history.length - 1]
     }
 
+    // Bind to a const: `inputEntry` is a `let`, so TypeScript drops the
+    // narrowing above inside the closures below.
+    const entry = inputEntry
+
     // Warn if technology is not in the "avoid" rings (hold or caution)
     const avoidRings: Ring[] = ['hold', 'caution']
-    const warning = !avoidRings.includes(inputEntry.ring)
-      ? `"${inputEntry.name}" is currently in the "${inputEntry.ring}" ring, not "hold" or "caution". Showing Adopt/Trial alternatives in the same quadrant anyway.`
+    const warning = !avoidRings.includes(entry.ring)
+      ? `"${entry.name}" is currently in the "${entry.ring}" ring, not "hold" or "caution". Showing Adopt/Trial alternatives in the same quadrant anyway.`
       : undefined
 
-    const alternatives = (
-      this.index.ringQuadrantMap.get(`adopt:${inputEntry.quadrant}`) ?? []
-    )
-      .concat(
-        this.index.ringQuadrantMap.get(`trial:${inputEntry.quadrant}`) ?? []
-      )
-      .filter((e) => e.name !== inputEntry!.name)
+    const alternatives = (this.index.ringQuadrantMap.get(`adopt:${entry.quadrant}`) ?? [])
+      .concat(this.index.ringQuadrantMap.get(`trial:${entry.quadrant}`) ?? [])
+      .filter((e) => e.name !== entry.name)
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    return { input: inputEntry, warning, alternatives }
+    return { input: entry, warning, alternatives }
   }
 
   auditTechStack(input: { technologies: string[] }): AuditResult {
@@ -177,7 +189,7 @@ export class RadarService {
 
     const results: TrendingEntry[] = []
 
-    for (const [key, entries] of this.index.historyMap) {
+    for (const entries of this.index.historyMap.values()) {
       if (entries.length < 2) continue
 
       const sorted = [...entries].sort((a, b) => a.volume - b.volume)
@@ -221,7 +233,13 @@ export class RadarService {
       entry = history[history.length - 1]
     }
 
-    const radarRiskMap: Record<Ring, number> = { adopt: 0, trial: 1, assess: 2, hold: 3, caution: 3 }
+    const radarRiskMap: Record<Ring, number> = {
+      adopt: 0,
+      trial: 1,
+      assess: 2,
+      hold: 3,
+      caution: 3,
+    }
     const radarRisk = radarRiskMap[entry.ring]
 
     const githubHealth = await this.fetcher.fetchGitHubHealth(input.name)
@@ -315,7 +333,8 @@ export class RadarService {
         radarUrl: 'https://www.thoughtworks.com/radar',
       })
 
-      const ringDisplay = currentRing === 'unknown' ? 'not in radar' : `${currentRing} — ${quadrant}`
+      const ringDisplay =
+        currentRing === 'unknown' ? 'not in radar' : `${currentRing} — ${quadrant}`
       const historyDisplay =
         historyLength > 0
           ? `${historyLength} appearances across ${firstYear}–${lastYear}`
@@ -415,7 +434,7 @@ export class RadarService {
         batch.map(async (item) => {
           const risk = await this.getTechnologyRiskScore({ name: item.name })
           return { item, riskScore: risk?.riskScore ?? 6 }
-        })
+        }),
       )
       scored.push(...batchResults)
     }
@@ -429,7 +448,7 @@ export class RadarService {
 
     const roadmap: RoadmapItem[] = scored.map(({ item, riskScore }, idx) => {
       const action: 'migrate' | 'monitor' = item.status === 'migrate' ? 'migrate' : 'monitor'
-      const quadrant = item.quadrant!
+      const quadrant = item.quadrant ?? 'unknown'
 
       let effort: 'low' | 'medium' | 'high'
       if (quadrant === 'platforms' || quadrant === 'tools' || riskScore >= 7) {
