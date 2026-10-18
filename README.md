@@ -103,11 +103,15 @@ Uses `listByRingAndQuadrant` with `ring: adopt, quadrant: platforms`. Returns al
 
 The server runs as a Cloudflare Worker — no container, no process to keep alive.
 
+It is live at **https://radar-yoda.121314.best** (MCP endpoint: `/mcp`).
+
 ```bash
 npm install
 npx wrangler login   # once
-npm run deploy       # → https://radar-yoda-server.<your-subdomain>.workers.dev
+npm run deploy       # → https://radar-yoda.121314.best
 ```
+
+The hostname comes from `routes` in `wrangler.jsonc`, with `custom_domain: true` so wrangler creates the DNS record and TLS certificate itself. The zone must be active on the same Cloudflare account. `workers_dev` is set to `false`, so there is no `*.workers.dev` hostname — the custom domain is the only entry point.
 
 Store a GitHub token as a Worker secret to raise the GitHub API rate limit from 60 to 5,000 requests/hour. Secrets are set out-of-band and never land in the repo:
 
@@ -117,7 +121,7 @@ npx wrangler secret put GITHUB_TOKEN
 
 ### Continuous deployment
 
-`.github/workflows/deploy.yml` runs on every push to `main`. It regenerates the volumes manifest (failing if the committed copy is stale), type-checks, runs the tests, runs `biome check`, deploys, and finally smoke-tests the live Worker. Pull requests run the verification steps only.
+`.github/workflows/deploy.yml` runs on every push to `main`. It regenerates the volumes manifest (failing if the committed copy is stale), type-checks, runs the tests, runs `biome check`, deploys, and finally smoke-tests the live Worker. Pull requests run the verification steps only. The smoke test targets `PUBLIC_URL`, defined once at the top of the workflow, rather than wrangler-action's `deployment-url` — that output is empty when `workers_dev` is false.
 
 Add these under **Settings → Secrets and variables → Actions**:
 
@@ -144,7 +148,7 @@ Every request is rate-limited to 600 per minute per IP. Over that the Worker ret
   "mcpServers": {
     "tech-radar-advisor": {
       "type": "http",
-      "url": "https://radar-yoda-server.<your-subdomain>.workers.dev/mcp"
+      "url": "https://radar-yoda.121314.best/mcp"
     }
   }
 }
@@ -161,7 +165,7 @@ npm run verify  # same, but prints the responses instead of asserting
 `npm run smoke` is the same script CI runs after deploying, so it doubles as a local end-to-end check. Both accept a URL argument to point at a deployment:
 
 ```bash
-npm run smoke -- https://radar-yoda-server.<your-subdomain>.workers.dev
+npm run smoke -- https://radar-yoda.121314.best
 ```
 
 ### Cost note

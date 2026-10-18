@@ -16,7 +16,7 @@ npm run gen:volumes               # regenerate src/generated/volumes.ts
 npm run demo                      # run the Jenkins migration demo script
 ```
 
-Worker (Cloudflare):
+Worker (Cloudflare) — production is https://radar-yoda.121314.best:
 
 ```bash
 npm run dev                       # wrangler dev on http://127.0.0.1:8787
@@ -60,6 +60,8 @@ DataLoader → RadarIndex ← RadarService ← MCP Tools ← src/worker.ts
 **Volumes are compiled in, not read from disk.** `scripts/gen-volumes.ts` emits `src/generated/volumes.ts` containing one static JSON import per volume. Workers have no filesystem. Adding a volume means running `npm run gen:volumes` and committing the result; CI fails if the two drift apart. That file is generated — never hand-edit it, and it is excluded from biome.
 
 **`import.meta.url` is patched via `wrangler.jsonc` `define`.** `@mastra/mcp` calls `createRequire(import.meta.url)` at module scope to probe for an optional Datadog tracer. `import.meta.url` is `undefined` in workerd, so that call throws and the whole Worker fails to start. `wrangler.jsonc` substitutes a dummy file URL. The probe is guarded by a try/catch and never actually runs. If the Worker dies at startup with a `createRequire` error, that define has been lost.
+
+**The public hostname is `radar-yoda.121314.best`, and `workers_dev` is `false`.** Configured by `routes` + `custom_domain: true` in `wrangler.jsonc`; wrangler owns the DNS record and TLS certificate, so the zone must live on the same Cloudflare account. Because `workers_dev` is off, `wrangler-action`'s `deployment-url` output is empty — the CI smoke test uses the workflow's `PUBLIC_URL` env instead. Renaming the hostname means updating three places: `wrangler.jsonc` routes, `PUBLIC_URL` in `.github/workflows/deploy.yml`, and `.mcp.json`.
 
 **MCP runs stateless (`options: { serverless: true }`).** This selects `handleServerlessRequest`, which builds a fresh transport per request with `enableJsonResponse: true`. That avoids both session-affinity bugs when requests land on different isolates and SSE buffering through the `fetch-to-node` adapter. Don't switch to stateful mode without a Durable Object.
 

@@ -2,7 +2,7 @@
   "mcpServers": {
     "tech-radar-advisor": {
       "type": "http",
-      "url": "http://127.0.0.1:8787/mcp"
+      "url": "https://radar-yoda.121314.best/mcp"
     }
   }
 }

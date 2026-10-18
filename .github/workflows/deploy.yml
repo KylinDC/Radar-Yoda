@@ -11,14 +11,19 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # The custom domain from wrangler.jsonc. `workers_dev` is disabled, so there
+  # is no *.workers.dev hostname to fall back on — this is the canonical URL.
+  PUBLIC_URL: https://radar-yoda.121314.best
+
 jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -53,9 +58,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -71,9 +76,11 @@ jobs:
 
       # The unit tests and `wrangler deploy --dry-run` never execute the bundle,
       # so this is the only step that proves the Worker actually boots in the
-      # Workers runtime and answers MCP requests.
+      # Workers runtime and answers MCP requests. Smoke-tests the custom domain
+      # rather than the action's deployment URL, because that URL is empty when
+      # `workers_dev` is false. The script retries for ~30s to ride out DNS.
       - name: Smoke test the deployment
-        run: npm run smoke -- "${{ steps.deploy.outputs.deployment-url }}"
+        run: npm run smoke -- "${{ env.PUBLIC_URL }}"
 
       # Runs even when the smoke test fails, so the URL is always recorded.
       - name: Summary
@@ -81,5 +88,5 @@ jobs:
         run: |
           echo "### Deployed :rocket:" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Worker URL: ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "MCP endpoint: ${{ steps.deploy.outputs.deployment-url }}/mcp" >> "$GITHUB_STEP_SUMMARY"
+          echo "Worker URL: ${PUBLIC_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "MCP endpoint: ${PUBLIC_URL}/mcp" >> "$GITHUB_STEP_SUMMARY"
