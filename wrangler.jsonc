@@ -9,11 +9,11 @@
   "observability": {
     "enabled": true
   },
-  // The custom domain is the only public entry point. Without an explicit
-  // `workers_dev` value, wrangler disables the *.workers.dev hostname as soon
-  // as any route is configured — spelling it out keeps that intentional shape
-  // instead of relying on the default.
-  "workers_dev": false,
+  // The custom domain is the public entry point. The *.workers.dev hostname is
+  // kept alive only because the CI smoke test needs it: the zone's security
+  // rules reject GitHub Actions runner IPs with a 403 before the request ever
+  // reaches the Worker, and workers.dev is not behind that zone.
+  "workers_dev": true,
   // `custom_domain: true` makes wrangler create the DNS record and the TLS
   // certificate itself, so the zone must be active on this same account.
   "routes": [

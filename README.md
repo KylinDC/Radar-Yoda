@@ -111,7 +111,7 @@ npx wrangler login   # once
 npm run deploy       # → https://radar-yoda.121314.best
 ```
 
-The hostname comes from `routes` in `wrangler.jsonc`, with `custom_domain: true` so wrangler creates the DNS record and TLS certificate itself. The zone must be active on the same Cloudflare account. `workers_dev` is set to `false`, so there is no `*.workers.dev` hostname — the custom domain is the only entry point.
+The hostname comes from `routes` in `wrangler.jsonc`, with `custom_domain: true` so wrangler creates the DNS record and TLS certificate itself. The zone must be active on the same Cloudflare account. `workers_dev` stays `true` for a second `*.workers.dev` hostname: it is not an advertised entry point, but CI's smoke test needs it, because the zone's security rules return 403 to GitHub Actions runner IPs before a request reaches the Worker, and `workers.dev` is outside that zone.
 
 Store a GitHub token as a Worker secret to raise the GitHub API rate limit from 60 to 5,000 requests/hour. Secrets are set out-of-band and never land in the repo:
 
@@ -121,7 +121,7 @@ npx wrangler secret put GITHUB_TOKEN
 
 ### Continuous deployment
 
-`.github/workflows/deploy.yml` runs on every push to `main`. It regenerates the volumes manifest (failing if the committed copy is stale), type-checks, runs the tests, runs `biome check`, deploys, and finally smoke-tests the live Worker. Pull requests run the verification steps only. The smoke test targets `PUBLIC_URL`, defined once at the top of the workflow, rather than wrangler-action's `deployment-url` — that output is empty when `workers_dev` is false.
+`.github/workflows/deploy.yml` runs on every push to `main`. It regenerates the volumes manifest (failing if the committed copy is stale), type-checks, runs the tests, runs `biome check`, deploys, and finally smoke-tests the live Worker. Pull requests run the verification steps only. The smoke test targets wrangler-action's `deployment-url` (the `*.workers.dev` hostname), not `PUBLIC_URL`: the zone's security rules reject GitHub Actions runner IPs with 403 before the request reaches the Worker, so a smoke test against the custom domain would always fail in CI even though the deployment is healthy. `PUBLIC_URL` is still used for the job summary.
 
 Add these under **Settings → Secrets and variables → Actions**:
 

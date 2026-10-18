@@ -34,7 +34,13 @@ async function retry<T>(label: string, fn: () => Promise<T>, attempts = 10): Pro
 
 const health = await retry('health', async () => {
   const res = await fetch(`${base}/health`)
-  assert.equal(res.status, 200, `GET /health returned ${res.status}`)
+  if (!res.ok) {
+    // Include the body: a 403 from Cloudflare's edge (WAF, bot rules) looks
+    // nothing like a Worker error, and the body is the only way to tell them
+    // apart from a CI log.
+    const text = await res.text().catch(() => '')
+    throw new Error(`GET /health returned ${res.status}: ${text.slice(0, 300)}`)
+  }
   const body = (await res.json()) as { status?: string }
   assert.equal(body.status, 'ok', `GET /health body was ${JSON.stringify(body)}`)
   return body
