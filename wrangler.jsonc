@@ -6,8 +6,18 @@
   // Required by fetch-to-node (it uses node:stream / node:buffer) and by
   // @mastra/core, which imports fs/promises, os and path at module scope.
   "compatibility_flags": ["nodejs_compat"],
+  // Ship request logs (including the invocation log for every request) to the
+  // Cloudflare dashboard, so errors are diagnosable without reproducing them
+  // locally. Traces stay off: the Worker handles a single request per
+  // invocation and makes no outbound service calls worth tracing.
   "observability": {
-    "enabled": true
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false
+    }
   },
   // The custom domain is the public entry point. The *.workers.dev hostname is
   // kept alive only because the CI smoke test needs it: the zone's security
