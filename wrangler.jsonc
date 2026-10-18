@@ -6,17 +6,26 @@
   // Required by fetch-to-node (it uses node:stream / node:buffer) and by
   // @mastra/core, which imports fs/promises, os and path at module scope.
   "compatibility_flags": ["nodejs_compat"],
-  // Ship request logs (including the invocation log for every request) to the
-  // Cloudflare dashboard, so errors are diagnosable without reproducing them
-  // locally. Traces stay off: the Worker handles a single request per
-  // invocation and makes no outbound service calls worth tracing.
+  // Persist request logs, invocation logs and traces to the Cloudflare
+  // observability platform, and let it surface real-time Issues. The legacy
+  // top-level `enabled` stays false; the granular switches below supersede it.
   "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "redact_query_string": false,
     "logs": {
       "enabled": true,
-      "invocation_logs": true
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
     },
     "traces": {
-      "enabled": false
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    },
+    "issues": {
+      "enabled": true
     }
   },
   // The custom domain is the public entry point. The *.workers.dev hostname is
